@@ -388,6 +388,39 @@ esp_err_t i2c_bus_read_reg16(i2c_bus_device_handle_t dev_handle, uint16_t mem_ad
     return ret;
 }
 
+esp_err_t i2c_bus_read_reg32(i2c_bus_device_handle_t dev_handle, uint32_t mem_address, size_t data_len, uint8_t *data)
+{
+    I2C_BUS_CHECK(dev_handle != NULL, "device handle error", ESP_ERR_INVALID_ARG);
+    I2C_BUS_CHECK(data != NULL, "data pointer error", ESP_ERR_INVALID_ARG);
+    i2c_bus_device_t *i2c_device = (i2c_bus_device_t *)dev_handle;
+    I2C_BUS_INIT_CHECK(i2c_device->i2c_bus->is_init, ESP_ERR_INVALID_STATE);
+    uint8_t memAddress8[4];
+    memAddress8[0] = (uint8_t)((mem_address >> 24) & 0xFF);
+    memAddress8[1] = (uint8_t)((mem_address >> 16) & 0xFF);
+    memAddress8[2] = (uint8_t)((mem_address >> 8) & 0xFF);
+    memAddress8[3] = (uint8_t)(mem_address & 0xFF);
+    I2C_BUS_MUTEX_TAKE(i2c_device->i2c_bus->mutex, ESP_ERR_TIMEOUT);
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+    if (mem_address != NULL_I2C_MEM_ADDR) {
+        i2c_master_start(cmd);
+        i2c_master_write_byte(cmd, (i2c_device->dev_addr << 1) | I2C_MASTER_WRITE, I2C_ACK_CHECK_EN);
+        i2c_master_write(cmd, memAddress8, 4, I2C_ACK_CHECK_EN);
+    }
+
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (i2c_device->dev_addr << 1) | I2C_MASTER_READ, I2C_ACK_CHECK_EN);
+    i2c_master_read(cmd, data, data_len, I2C_MASTER_LAST_NACK);
+    i2c_master_stop(cmd);
+    esp_err_t ret = i2c_master_cmd_begin_with_conf(i2c_device->i2c_bus->i2c_port, cmd, I2C_BUS_TICKS_TO_WAIT, &i2c_device->conf);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "i2c_master_cmd_begin_with_conf failed, ret = %d", ret);
+    }
+    i2c_cmd_link_delete(cmd);
+    I2C_BUS_MUTEX_GIVE(i2c_device->i2c_bus->mutex, ESP_FAIL);
+    return ret;
+}
+
 static esp_err_t i2c_bus_write_reg8(i2c_bus_device_handle_t dev_handle, uint8_t mem_address, size_t data_len, const uint8_t *data)
 {
     I2C_BUS_CHECK(dev_handle != NULL, "device handle error", ESP_ERR_INVALID_ARG);
@@ -440,6 +473,109 @@ esp_err_t i2c_bus_write_reg16(i2c_bus_device_handle_t dev_handle, uint16_t mem_a
     }
     i2c_cmd_link_delete(cmd);
     I2C_BUS_MUTEX_GIVE(i2c_device->i2c_bus->mutex, ESP_FAIL);
+    return ret;
+}
+
+esp_err_t i2c_bus_write_reg32(i2c_bus_device_handle_t dev_handle, uint32_t mem_address, size_t data_len, const uint8_t *data)
+{
+    I2C_BUS_CHECK(dev_handle != NULL, "device handle error", ESP_ERR_INVALID_ARG);
+    I2C_BUS_CHECK(data != NULL, "data pointer error", ESP_ERR_INVALID_ARG);
+    i2c_bus_device_t *i2c_device = (i2c_bus_device_t *)dev_handle;
+    I2C_BUS_INIT_CHECK(i2c_device->i2c_bus->is_init, ESP_ERR_INVALID_STATE);
+    uint8_t memAddress8[4];
+    memAddress8[0] = (uint8_t)((mem_address >> 24) & 0xFF);
+    memAddress8[1] = (uint8_t)((mem_address >> 16) & 0xFF);
+    memAddress8[2] = (uint8_t)((mem_address >> 8) & 0xFF);
+    memAddress8[3] = (uint8_t)(mem_address & 0xFF);
+    I2C_BUS_MUTEX_TAKE(i2c_device->i2c_bus->mutex, ESP_ERR_TIMEOUT);
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (i2c_device->dev_addr << 1) | I2C_MASTER_WRITE, I2C_ACK_CHECK_EN);
+
+    if (mem_address != NULL_I2C_MEM_ADDR) {
+        i2c_master_write(cmd, memAddress8, 4, I2C_ACK_CHECK_EN);
+    }
+
+    i2c_master_write(cmd, (uint8_t *)data, data_len, I2C_ACK_CHECK_EN);
+    i2c_master_stop(cmd);
+    esp_err_t ret = i2c_master_cmd_begin_with_conf(i2c_device->i2c_bus->i2c_port, cmd, I2C_BUS_TICKS_TO_WAIT, &i2c_device->conf);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "i2c_master_cmd_begin_with_conf failed, ret = %d", ret);
+    }
+    i2c_cmd_link_delete(cmd);
+    I2C_BUS_MUTEX_GIVE(i2c_device->i2c_bus->mutex, ESP_FAIL);
+    return ret;
+}
+
+// 通用寄存器写函数
+esp_err_t i2c_bus_write_reg(i2c_bus_device_handle_t dev_handle, uint32_t reg_addr, uint8_t reg_len, const uint8_t *data, size_t data_len)
+{
+    I2C_BUS_CHECK(dev_handle != NULL, "device handle error", ESP_ERR_INVALID_ARG);
+    I2C_BUS_CHECK(data != NULL, "data pointer error", ESP_ERR_INVALID_ARG);
+    i2c_bus_device_t *i2c_device = (i2c_bus_device_t *)dev_handle;
+    I2C_BUS_INIT_CHECK(i2c_device->i2c_bus->is_init, ESP_ERR_INVALID_STATE);
+    
+    uint8_t addr_len = reg_len & 0x0F;
+    I2C_BUS_CHECK(addr_len >= 1 && addr_len <= 4, "invalid address length", ESP_ERR_INVALID_ARG);
+
+    uint8_t addr_buf[4] = {0};
+    for(int i = 0; i < addr_len; i++) {
+        addr_buf[addr_len-1-i] = (reg_addr >> (i*8)) & 0xFF; // 大端存储地址
+    }
+
+    I2C_BUS_MUTEX_TAKE(i2c_device->i2c_bus->mutex, ESP_ERR_TIMEOUT);
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    
+    // 写地址部分
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (i2c_device->dev_addr << 1) | I2C_MASTER_WRITE, I2C_ACK_CHECK_EN);
+    i2c_master_write(cmd, addr_buf, addr_len, I2C_ACK_CHECK_EN);
+    
+    // 写数据部分
+    i2c_master_write(cmd, data, data_len, I2C_ACK_CHECK_EN);
+    i2c_master_stop(cmd);
+    
+    esp_err_t ret = i2c_master_cmd_begin_with_conf(i2c_device->i2c_bus->i2c_port, cmd, I2C_BUS_TICKS_TO_WAIT, &i2c_device->conf);
+    i2c_cmd_link_delete(cmd);
+    I2C_BUS_MUTEX_GIVE(i2c_device->i2c_bus->mutex, ESP_FAIL);
+    
+    return ret;
+}
+
+// 通用寄存器读函数
+esp_err_t i2c_bus_read_reg(i2c_bus_device_handle_t dev_handle, uint32_t reg_addr, uint8_t reg_len, uint8_t *data, size_t data_len)
+{
+    I2C_BUS_CHECK(dev_handle != NULL, "device handle error", ESP_ERR_INVALID_ARG);
+    I2C_BUS_CHECK(data != NULL, "data pointer error", ESP_ERR_INVALID_ARG);
+    i2c_bus_device_t *i2c_device = (i2c_bus_device_t *)dev_handle;
+    I2C_BUS_INIT_CHECK(i2c_device->i2c_bus->is_init, ESP_ERR_INVALID_STATE);
+    
+    uint8_t addr_len = reg_len & 0x0F;
+    I2C_BUS_CHECK(addr_len >= 1 && addr_len <= 4, "invalid address length", ESP_ERR_INVALID_ARG);
+
+    uint8_t addr_buf[4] = {0};
+    for(int i = 0; i < addr_len; i++) {
+        addr_buf[addr_len-1-i] = (reg_addr >> (i*8)) & 0xFF; // 大端存储地址
+    }
+
+    I2C_BUS_MUTEX_TAKE(i2c_device->i2c_bus->mutex, ESP_ERR_TIMEOUT);
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    
+    // 写地址部分
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (i2c_device->dev_addr << 1) | I2C_MASTER_WRITE, I2C_ACK_CHECK_EN);
+    i2c_master_write(cmd, addr_buf, addr_len, I2C_ACK_CHECK_EN);
+    
+    // 读数据部分
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (i2c_device->dev_addr << 1) | I2C_MASTER_READ, I2C_ACK_CHECK_EN);
+    i2c_master_read(cmd, data, data_len, I2C_MASTER_LAST_NACK);
+    i2c_master_stop(cmd);
+    
+    esp_err_t ret = i2c_master_cmd_begin_with_conf(i2c_device->i2c_bus->i2c_port, cmd, I2C_BUS_TICKS_TO_WAIT, &i2c_device->conf);
+    i2c_cmd_link_delete(cmd);
+    I2C_BUS_MUTEX_GIVE(i2c_device->i2c_bus->mutex, ESP_FAIL);
+    
     return ret;
 }
 

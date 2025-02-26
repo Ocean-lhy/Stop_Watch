@@ -1,8 +1,15 @@
 # BMI270-Sensor-API 目录下的C文件
 file(GLOB BMI_SRCS BMI270-Sensor-API/*.c)
 
+file(GLOB UI_SRCS 
+    UI/*.c 
+    UI/components/*.c 
+    UI/screens/*.c
+    UI/images/*.c
+    UI/fonts/*.c
+)
+
 idf_component_register(
-                    SRCS 
-                        "main.cpp" "i2c_bus.c" "ir_nec_encoder.c" "ir_test.c" "mesh_stick_pink.c" "mesh_stick_green.c" ${BMI_SRCS}
-                    INCLUDE_DIRS
-                        ""  "BMI270-Sensor-API")
+                    SRCS "main.cpp" "i2c_bus.c" "ir_nec_encoder.c" "ir_test.c" "mesh_stick_pink.c" "mesh_stick_green.c" ${BMI_SRCS} ${UI_SRCS}
+                    INCLUDE_DIRS "."  "BMI270-Sensor-API" "UI" 
+                    REQUIRES driver nvs_flash esp_codec_dev spi_flash esp_lcd_touch esp_lcd_co5300 esp_lcd_touch_cst9217)

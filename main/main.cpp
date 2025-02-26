@@ -1,94 +1,6 @@
-#include <M5GFX.h>
-#include <lgfx/v1/panel/Panel_ST7789.hpp>
-#include <lgfx/v1/touch/Touch_FT5x06.hpp>
-
-// 管脚定义
-#define C6_IRQ_PIN (gpio_num_t)3
-#define LORA_IRQ_PIN (gpio_num_t)15
-#define IR_TX_GPIO_NUM (gpio_num_t)9
-
-#define I2C_0_SCL (gpio_num_t)8
-#define I2C_0_SDA (gpio_num_t)10
-#define I2C_DEV_TIMEOUT 4000000
-
-#define LCD_CS_PIN (gpio_num_t)17
-#define LCD_DC_PIN (gpio_num_t)16
-
-#define BEEP_PIN (gpio_num_t)11
-
-#define GROVE_OUT_PIN (gpio_num_t)5
-#define GROVE_IN_PIN (gpio_num_t)4
-
-#define HAT_PIN_1 (gpio_num_t)7
-#define HAT_PIN_2 (gpio_num_t)2
-#define HAT_PIN_3 (gpio_num_t)6
-
-class Stick_Arduino_Lcd : public lgfx::LGFX_Device
-{
-    lgfx::Panel_ST7789 _panel_instance;
-    lgfx::Touch_FT5x06 _touch_instance;
-    lgfx::Bus_SPI _bus_instance;
-
-public:
-    Stick_Arduino_Lcd(void)
-    {
-        {
-            auto cfg = _bus_instance.config();
-
-            cfg.pin_mosi = CONFIG_MOSI_GPIO;
-            cfg.pin_miso = CONFIG_MISO_GPIO;
-            cfg.pin_sclk = CONFIG_SCLK_GPIO;
-            cfg.pin_dc = LCD_DC_PIN;
-            cfg.freq_write = 40000000;
-
-            _bus_instance.config(cfg);
-            _panel_instance.setBus(&_bus_instance);
-        }
-        {
-            auto cfg = _panel_instance.config();
-
-            cfg.invert = true;
-            cfg.pin_cs = LCD_CS_PIN;
-            cfg.pin_rst = -1;
-            cfg.pin_busy = -1;
-            cfg.panel_width = 135;
-            cfg.panel_height = 240;
-            cfg.offset_x = 52;
-            cfg.offset_y = 40;
-
-            _panel_instance.config(cfg);
-        }
-
-        {
-            auto cfg = _touch_instance.config();
-
-            cfg.x_min = 0;
-            cfg.x_max = 135;
-            cfg.y_min = 0;
-            cfg.y_max = 240;
-            cfg.pin_int = C6_IRQ_PIN;
-            cfg.pin_rst = -1;
-            cfg.bus_shared = true;
-            cfg.offset_rotation = 0;
-
-            cfg.i2c_port = 0;
-            cfg.i2c_addr = 0x38;
-            cfg.pin_sda = I2C_0_SDA;
-            cfg.pin_scl = I2C_0_SCL;
-            cfg.freq = 400000;
-
-            _touch_instance.config(cfg);
-            _panel_instance.setTouch(&_touch_instance);
-        }
-
-        setPanel(&_panel_instance);
-    }
-};
-
-Stick_Arduino_Lcd Lcd;
-
 extern "C"
 {
+#include <math.h>
 #include <stdio.h>
 #include <inttypes.h>
 #include "sdkconfig.h"
@@ -100,6 +12,9 @@ extern "C"
 #include "esp_log.h"
 #include "driver/i2c.h"
 #include "driver/gpio.h"
+#include "driver/spi_master.h"
+#include "driver/i2s_std.h"
+#include "driver/i2s_tdm.h"
 #include "esp_timer.h"
 #include "esp_sleep.h"
 #include "driver/rtc_io.h"
@@ -111,9 +26,74 @@ extern "C"
 #include "i2c_bus.h"
 #include "bmi270.h"
 #include "ir_nec_encoder.h"
-#include "ra01s.h"
 
-#define TAG "main"
+#include "soc/soc_caps.h"
+#include "esp_codec_dev.h"
+#include "esp_codec_dev_defaults.h"
+
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_panel_vendor.h"
+#include "esp_lcd_panel_ops.h"
+
+#include "lvgl.h"
+#include "lv_demos.h"
+#include "esp_lcd_co5300.h"
+#include "esp_lcd_touch_cst9217.h"
+
+#include "ui.h"
+
+// 管脚定义
+
+// I2C
+#define SYS_I2C_SCL (gpio_num_t)48
+#define SYS_I2C_SDA (gpio_num_t)47
+#define I2C_DEV_TIMEOUT 4000000
+
+// IRQ
+#define TP_INT_IRQ_PIN (gpio_num_t)21
+// #define IMU_IRQ_PIN (gpio_num_t)14   // not yet used
+
+// GPIO
+#define MOTOR_ENABLE_PIN (gpio_num_t)13
+#define PWROFF_PULSE_PIN (gpio_num_t)12
+#define EXT_GPIO10_PIN (gpio_num_t)10
+#define EXT_GPIO9_PIN (gpio_num_t)9
+#define EXT_GPIO8_PIN (gpio_num_t)8
+#define EXT_GPIO7_PIN (gpio_num_t)7
+#define EXT_GPIO6_PIN (gpio_num_t)6
+#define EXT_GPIO5_PIN (gpio_num_t)5
+#define EXT_GPIO4_PIN (gpio_num_t)4
+#define EXT_GPIO3_PIN (gpio_num_t)3
+
+#define USER_BUTTON1_PIN (gpio_num_t)1
+#define USER_BUTTON2_PIN (gpio_num_t)2
+
+// speaker and mic ES8311
+#define I2S_MCLK_PIN (gpio_num_t)18
+#define I2S_BCLK_PIN (gpio_num_t)17
+#define I2S_DADC_PIN (gpio_num_t)16
+#define I2S_LRCK_PIN (gpio_num_t)15
+#define I2S_DDAT_PIN (gpio_num_t)14
+#define I2S_MAX_KEEP SOC_I2S_NUM
+
+// grove
+#define GROVE_3_PIN EXT_GPIO9_PIN
+#define GROVE_4_PIN EXT_GPIO10_PIN
+
+// QSPI for screen
+#define QSPI_TE_PIN (gpio_num_t)38
+#define QSPI_CS_PIN (gpio_num_t)39
+#define QSPI_SCLK_PIN (gpio_num_t)40
+#define QSPI_D0_PIN (gpio_num_t)41
+#define QSPI_D1_PIN (gpio_num_t)42
+#define QSPI_D2_PIN (gpio_num_t)46
+#define QSPI_D3_PIN (gpio_num_t)45
+#define QSPI_RST_PIN (gpio_num_t)-1 // PI4IO BIT 1
+// TP
+#define TOUCH_INT_PIN TP_INT_IRQ_PIN
+#define TOUCH_RST_PIN (gpio_num_t)-1 // PI4IO BIT 0
+#define TOUCH_SCL_PIN SYS_I2C_SCL
+#define TOUCH_SDA_PIN SYS_I2C_SDA
 
 // bit operation
 #define setbit(x, y) x |= (0x01 << y)
@@ -122,11 +102,13 @@ extern "C"
 #define getbit(x, y) ((x) >> (y) & 0x01)
 
 // I2C device addr
-#define PI4IO_M_ADDR 0x43
-#define PI4IO_B_ADDR 0x44
+#define PI4IO_ADDR 0x43
 #define BMI270_ADDR 0x68
 #define BQ27220_ADDR 0x55
 #define AW32001_ADDR 0x49
+#define ES8311_ADDR 0x18
+#define RX8130CE_ADDR 0x32
+#define CST9217_ADDR 0x5A
 
 // PI4IO registers
 #define PI4IO_REG_CHIP_RESET 0x01
@@ -151,30 +133,67 @@ extern "C"
 #define AW32001_REG_CHR_VOL 0x04
 #define AW32001_REG_SYS_STA 0x08
 
+// LCD TOUCH
+#define LCD_HOST    SPI2_HOST
+#define TOUCH_HOST  I2C_NUM_0
+
+#define LCD_BIT_PER_PIXEL       (16)
+
+#define EXAMPLE_LCD_H_RES              466
+#define EXAMPLE_LCD_V_RES              466
+
+#define EXAMPLE_LVGL_TICK_PERIOD_MS    1
+#define EXAMPLE_LVGL_TASK_MAX_DELAY_MS 500
+#define EXAMPLE_LVGL_TASK_MIN_DELAY_MS 1
+#define EXAMPLE_LVGL_TASK_STACK_SIZE   (4 * 1024)
+#define EXAMPLE_LVGL_TASK_PRIORITY     2
+
+#define MAX_POINTS_REPORT 5
+
+#define TAG "main"
+
+
     static void print_chip_info();
 
     i2c_bus_handle_t i2c_bus = NULL;
+    i2c_bus_handle_t grove_i2c_bus = NULL;
 
-    static bool volatile c6_irq_flag = false;
-    static bool volatile c6_lora_irq_flag = false;
+    static bool volatile touch_irq_flag = false;
     static bool c6_global_irq_init();
     void IRAM_ATTR c6_global_irq_handler(void *arg);
 
+    // MOTOR
+    static void motor_init();
+    static void motor_enable();
+    static void motor_disable();
+
     // PI4IO
-    i2c_bus_device_handle_t pi4io_m_dev = NULL;
-    i2c_bus_device_handle_t pi4io_b_dev = NULL;
+    i2c_bus_device_handle_t pi4io_dev = NULL;
     static bool led_blink = false;
     static uint64_t last_blink_time = 0;
     static bool btn1, btn2 = false;
     static void pi4io_init();
-    static void pi4io_led_set_level(bool level);
-    static void pi4io_lcd_bl_set_level(bool level);
-    static bool pi4io_vin_has_input();
-    static void pi4io_ext_power_control(bool en);
-    static void pi4io_power_off();
-    static void pi4io_check_irq();
-    static void button_update();
-    static void lcd_reset();
+    static void pi4io_lcd_reset();
+    static void pi4io_tp_reset();
+    static void pi4io_speaker_enable();
+    static void pi4io_speaker_disable();
+    static uint8_t pi4io_vin_detect();
+    static void pi4io_5V_out_enable();
+    static void pi4io_5V_out_disable();
+
+    // ES8311
+    i2c_bus_device_handle_t es8311_dev = NULL;
+    esp_codec_dev_handle_t codec_dev = NULL;
+    typedef struct {
+        i2s_chan_handle_t tx_handle;
+        i2s_chan_handle_t rx_handle;
+    } i2s_keep_t;
+    static i2s_comm_mode_t i2s_in_mode = I2S_COMM_MODE_STD;
+    static i2s_comm_mode_t i2s_out_mode = I2S_COMM_MODE_STD;
+    static i2s_keep_t *i2s_keep[I2S_MAX_KEEP];
+    static void es8311_codec_init();
+    static esp_err_t record_audio(uint8_t* data, size_t size);
+    static esp_err_t play_audio(const uint8_t* data, size_t size);
 
     // BQ27220
     i2c_bus_device_handle_t bq27220_dev = NULL;
@@ -211,59 +230,53 @@ extern "C"
     static void bmi270_dev_init();
     static void bmi270_dev_update();
 
-// IR
-    static uint16_t ir_addr = 0x5555;
-    static uint16_t ir_cmd = 0x00;
-    extern void ir_tx_init();
-    extern void ir_tx_trans(uint16_t addr, uint16_t cmd);
-
-// Beep
-#define LEDC_TIMER              LEDC_TIMER_0
-#define LEDC_MODE               LEDC_LOW_SPEED_MODE
-#define LEDC_OUTPUT_IO          BEEP_PIN // Define the output GPIO
-#define LEDC_CHANNEL            LEDC_CHANNEL_0
-#define LEDC_DUTY_RES           LEDC_TIMER_13_BIT // Set duty resolution to 13 bits
-#define LEDC_DUTY               (4096) // Set duty to 50%. (2 ** 13) * 50% = 4096
-#define LEDC_FREQUENCY          (2000) // Frequency in Hertz. Set frequency at 2 kHz
-    static void beep_init();
-    static void beep_on();
-    static void beep_off();
-
-// LoRa SX1262
-// carrier frequency:           915.0 MHz
-// bandwidth:                   500 kHz
-// spreading factor:            7
-// coding rate:                 5
-// sync word:                   0x34 (public network/LoRaWAN)
-// output power:                22 dBm
-// preamble length:             20 symbols
-#define LORA_SEND 0
-#define LORA_BW 125.0f
-#define LORA_SF 12
-#define LORA_CR 8
-// #define LORA_BW 500
-// #define LORA_SF 7
-// #define LORA_CR 5
-
-#define LORA_FREQ 915000000
-// #define LORA_FREQ 868000000
-#define LORA_SYNC_WORD 0x34
-#define LORA_TX_POWER 22
-#define LORA_PREAMBLE_LEN 20
-
-    static void sx1262_init();
-    static void sx1262_reset();
-    static void sx1262_rf_turn_on();
-    static void sx1262_rf_turn_off();
-    static void sx1262_tx_test();
-    static void sx1262_rx_test();
-
     // LCD
-    uint8_t idx = 0;
-    uint32_t color[5] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_WHITE, TFT_BLACK};
-    uint64_t last_touch = 0;
-    extern const unsigned char mesh_stick_green[7456];
-    extern const unsigned char mesh_stick_pink[7450];
+    static lv_disp_draw_buf_t disp_buf; // 包含称为绘制缓冲区的内部图形缓冲区
+    static lv_disp_drv_t disp_drv;      //包含回调函数
+    static SemaphoreHandle_t lvgl_mux = NULL;
+    static bool example_notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx);
+    static void example_touch_isr_cb(esp_lcd_touch_handle_t tp);
+    static void example_lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map);
+    static void example_lvgl_update_cb(lv_disp_drv_t *drv);
+    static void example_lvgl_rounder_cb(struct _lv_disp_drv_t *disp_drv, lv_area_t *area);
+    static void example_lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data);
+    static void example_increase_lvgl_tick(void *arg);
+    static bool example_lvgl_lock(int timeout_ms);
+    static void example_lvgl_unlock(void);
+    static void example_lvgl_port_task(void *arg);
+    static void lcd_init();
+
+    // touch
+    enum work_mode{
+        NOMAL_MODE = 0,
+        GESTURE_MODE = 1,
+        LP_MODE = 2,
+        DEEPSLEEP = 3,
+        DIFF_MODE = 4,
+        RAWDATA_MODE = 5,
+        BASELINE_MODE = 6,
+        CALIBRATE_MODE = 7,
+        FAC_TEST_MODE = 8,
+        ENTER_BOOT_MODE = 0xCA,
+    };
+    typedef struct tp_info{
+        uint8_t id;
+        uint8_t switch_;
+        uint16_t x;
+        uint16_t y;
+        uint16_t z;
+    }tp_info_t;
+    i2c_bus_device_handle_t cst9217_dev = NULL;
+    static SemaphoreHandle_t touch_mux = NULL;
+    static esp_lcd_touch_handle_t tp = NULL;
+    static tp_info_t tp_info[MAX_POINTS_REPORT];
+    static void cst9217_read_chip_id();
+    static void cst9217_read_tpinfo();
+    static void cst9217_init();
+    static void cst9217_read_word_from_mem(uint8_t type, uint16_t addr, uint32_t *value);
+    static void cst9217_read_data(uint8_t *data, uint16_t len);
+    static void cst9217_set_workmode(enum work_mode mode, uint8_t enable);
+    static void cst9217_update();
 
     // sleep mode test
     static void c6_enter_light_sleep_mode();
@@ -274,12 +287,7 @@ extern "C"
     static void nvs_init();
 
     // Grove I2C test
-    static void grvoe_i2c_test();
-
-    // HAT GPIO Blink test
-    static bool hat_gpio_flag = false;
-    static void hat_gpio_init();
-    static void hat_gpio_blink();
+    static void grove_i2c_test();
 
     void app_main(void)
     {
@@ -287,17 +295,19 @@ extern "C"
         vTaskDelay(3000 / portTICK_PERIOD_MS);
         printf("app main start\r\n");
 
-        gpio_hold_dis((gpio_num_t)CONFIG_NSS_GPIO);
+        // gpio_hold_dis((gpio_num_t)CONFIG_NSS_GPIO);
 
         print_chip_info();
 
         c6_global_irq_init();
-        hat_gpio_init();
+        
+        // grove i2c test
+        // grove_i2c_test();
 
         i2c_config_t conf;
         conf.mode = I2C_MODE_MASTER;
-        conf.sda_io_num = I2C_0_SDA;
-        conf.scl_io_num = I2C_0_SCL;
+        conf.sda_io_num = SYS_I2C_SDA;
+        conf.scl_io_num = SYS_I2C_SCL;
         conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
         conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
         conf.master.clk_speed = 400000;
@@ -305,14 +315,22 @@ extern "C"
         i2c_bus = i2c_bus_create(I2C_NUM_0, &conf);
 
         vTaskDelay(1000 / portTICK_PERIOD_MS);
-        i2c_bus_scan(i2c_bus, NULL, 0);
+        uint8_t i2c_addr[128] = {0};
+        i2c_bus_scan(i2c_bus, i2c_addr, 0);
+        for (int i = 0; i < 128; i++) 
+        {
+            if (i2c_addr[i] != 0) 
+            {
+                printf("i2c_addr[%d] = 0x%02x\n", i, i2c_addr[i]);
+            }
+        }
+
+        // 震动电机
+        motor_init();
 
         // IO扩展
         pi4io_init();
-        pi4io_ext_power_control(true);
-
-        // 默认注释掉, 里面死循环
-        // grvoe_i2c_test();
+        pi4io_speaker_enable();
 
         // 充电管理
         aw32001_init();
@@ -327,93 +345,127 @@ extern "C"
         // IMU
         bmi270_dev_init();
 
-        // 红外发射
-        ir_tx_init();
+        // ES8311 初始化
+        es8311_codec_init();
 
-        // 蜂鸣器
-        beep_init();
-
-        // LoRa
-        sx1262_init();
+        // 触摸
+        cst9217_init();
 
         // LCD
-        lcd_reset();
-        pi4io_lcd_bl_set_level(true);
-        Lcd.begin();
-        Lcd.drawPng(mesh_stick_pink, sizeof(mesh_stick_pink), 0, 0);
+        lcd_init();
 
         // c6_enter_light_sleep_mode();
         // c6_enter_deep_sleep_mode();
+        
+        // 分配音频缓冲区
+        uint8_t* audio_buffer = (uint8_t*)malloc(10240);
 
+
+        {
+            // 保持编解码器常开
+            esp_codec_dev_sample_info_t fs = {
+                .bits_per_sample = 16,
+                .channel = 2,
+                .sample_rate = 16000,
+            };
+            esp_codec_dev_open(codec_dev, &fs);
+            // 生成1kHz正弦波
+            const int samples = 1024;
+            int16_t *wave = (int16_t *)malloc(samples * sizeof(int16_t));
+            for (int i = 0; i < samples; i++) {
+                wave[i] = 32767 * sin(2 * M_PI * 1000 * i / 16000);
+            }
+            
+            for (int i = 0; i < 3; i++) {
+                esp_codec_dev_write(codec_dev, (uint8_t *)wave, samples * sizeof(int16_t));
+            }
+            free(wave);
+        }
+
+        
         while (1)
         {
             // 按键读取
-            button_update();
+            // button_update();
 
             if (esp_timer_get_time() - last_blink_time > 3000000)
             {
-                hat_gpio_blink();
                 last_blink_time = esp_timer_get_time();
                 led_blink = !led_blink;
-                pi4io_led_set_level(led_blink);
-                pi4io_ext_power_control(led_blink);
+                // pi4io_led_set_level(led_blink);
+                // pi4io_ext_power_control(led_blink);
                 aw32001_check_status();
                 bmi270_dev_update();
                 bq27220_read_voltage();
                 bq27220_read_current();
-                // printf("\r\n");
+                uint8_t vin_det = pi4io_vin_detect();
+                printf("vin_det = %d\n", vin_det);
+                printf("\r\n");
 
-                ir_tx_trans(ir_addr, ir_cmd);
-                ir_cmd++;
-                beep_on();
+                
+
+                // motor_enable();
                 vTaskDelay(100 / portTICK_PERIOD_MS);
-                beep_off();
-            }
-
-            // 触摸
-            m5gfx::touch_point_t tp[2];
-            int nums = Lcd.getTouch(tp, 2);
-            for (int i = 0; i < nums; ++i)
-            {
-                Lcd.fillCircle(tp[i].x, tp[i].y, 3, rand());
-            }
-
-            // 清屏
-            if ((esp_timer_get_time() - last_touch) > 15000000)
-            {
-                last_touch = esp_timer_get_time();
-                idx = (idx + 1) % 5;
-                Lcd.clear(color[idx]);
-                Lcd.drawRect(0, 0, 135, 240, TFT_WHITE);
-                char buf[32] = {0};
-                sprintf(buf, "Reset Count: %ld", restart_counter);
-                Lcd.drawCenterString(buf, 67, 120);
-
-                sx1262_tx_test();
+                // motor_disable();
             }
 
             // 按键
             if (btn1)
             {
                 btn1 = false;
-                // Lcd.drawPng(mesh_stick_pink, sizeof(mesh_stick_pink), 0, 0);
-                Lcd.clear(TFT_BLACK);
+                printf("btn1 pressed\n");
+                
+
+                // 设置增益和音量
+                esp_codec_dev_set_in_gain(codec_dev, 50.0); // 提高麦克风增益
+                esp_codec_dev_set_out_vol(codec_dev, 80.0); // 提高音量
+
+                // 录音3秒
+                uint32_t start = esp_timer_get_time();
+                size_t total_read = 0;
+                while ((esp_timer_get_time() - start) < 3000000) {
+                    esp_err_t ret = esp_codec_dev_read(codec_dev, audio_buffer, 10240);
+                    if (ret == ESP_OK) {
+                        total_read += 10240;
+                        break;
+                    }
+                }
+                printf("Recorded %d bytes\n", total_read);
+
+                // 回放录音
+                size_t remain = total_read;
+                uint8_t *play_ptr = audio_buffer;
+                while (remain > 0) {
+                    size_t write_size = (remain > 1024) ? 1024 : remain;
+                    esp_codec_dev_write(codec_dev, play_ptr, write_size);
+                    play_ptr += write_size;
+                    remain -= write_size;
+                }
             } else if (btn2)
             {
                 btn2 = false;
-                // Lcd.drawPng(mesh_stick_green, sizeof(mesh_stick_green), 0, 0);
-                Lcd.clear(TFT_WHITE);
+                printf("btn2 pressed\n");
             }
 
-            // LoRa 接收?
-            // if (c6_lora_irq_flag) {
-            //     c6_lora_irq_flag = false;
-            //     printf("c6_lora_irq_flag\n");
-                sx1262_rx_test();
-            // }
+            if (touch_irq_flag)
+            {
+                BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+                
+                // 处理触摸数据
+                cst9217_update();
+                
+                // 处理完成后重新启用中断
+                touch_irq_flag = false;
+                gpio_intr_enable(TP_INT_IRQ_PIN);
+                
+                // 可选：如果使用FreeRTOS API需要从ISR调用
+                portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+            }
 
             vTaskDelay(10 / portTICK_PERIOD_MS);
         }
+        
+        free(audio_buffer);
     }
 
     /******************************************************************************/
@@ -453,213 +505,168 @@ extern "C"
         gpio_config_t io_conf;
         io_conf.intr_type = GPIO_INTR_ANYEDGE;
         io_conf.mode = GPIO_MODE_INPUT;
-        io_conf.pin_bit_mask = 1 << C6_IRQ_PIN | 1 << LORA_IRQ_PIN;
+        io_conf.pin_bit_mask = (1 << USER_BUTTON1_PIN) | (1 << USER_BUTTON2_PIN) | (1 << TP_INT_IRQ_PIN) /* | 1 << IMU_IRQ_PIN*/;
         io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
         io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
         gpio_config(&io_conf);
         gpio_install_isr_service(0);
-        gpio_isr_handler_add(C6_IRQ_PIN, c6_global_irq_handler, (void *)C6_IRQ_PIN);
-        gpio_isr_handler_add(LORA_IRQ_PIN, c6_global_irq_handler, (void *)LORA_IRQ_PIN);
+        gpio_isr_handler_add(USER_BUTTON1_PIN, c6_global_irq_handler, (void *)USER_BUTTON1_PIN);
+        gpio_isr_handler_add(USER_BUTTON2_PIN, c6_global_irq_handler, (void *)USER_BUTTON2_PIN);
+        gpio_isr_handler_add(TP_INT_IRQ_PIN, c6_global_irq_handler, (void *)TP_INT_IRQ_PIN);
+        // gpio_isr_handler_add(IMU_IRQ_PIN, c6_global_irq_handler, (void *)IMU_IRQ_PIN);
         return true;
     }
 
     void IRAM_ATTR c6_global_irq_handler(void *arg)
     {
-        if ((uint32_t)arg == C6_IRQ_PIN)
+        if ((uint32_t)arg == TP_INT_IRQ_PIN)
         {
-            c6_irq_flag = true;
+            touch_irq_flag = true;
         }
-        else if ((uint32_t)arg == LORA_IRQ_PIN)
+        else 
+        if ((uint32_t)arg == USER_BUTTON1_PIN)
         {
-            c6_lora_irq_flag = true;
+            btn1 = true;
         }
+        else 
+        if ((uint32_t)arg == USER_BUTTON2_PIN)
+        {
+            btn2 = true;
+        }
+        // else if ((uint32_t)arg == IMU_IRQ_PIN)
+        // {
+        //     c6_lora_irq_flag = true;
+        // }
+    }
+    
+    /******************************************************************************/
+    static void motor_init()
+    {
+        printf("motor_init\n");
+        gpio_config_t io_conf;
+        io_conf.intr_type = GPIO_INTR_DISABLE;
+        io_conf.mode = GPIO_MODE_OUTPUT;
+        io_conf.pin_bit_mask = (1 << MOTOR_ENABLE_PIN);
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+        gpio_config(&io_conf);
+    }
+
+    static void motor_enable()
+    {
+        gpio_set_level(MOTOR_ENABLE_PIN, 1);
+    }
+
+    static void motor_disable()
+    {
+        gpio_set_level(MOTOR_ENABLE_PIN, 0);
     }
 
     /******************************************************************************/
     static void pi4io_init()
     {
-        pi4io_m_dev = i2c_bus_device_create(i2c_bus, PI4IO_M_ADDR, 400000);
-        if (pi4io_m_dev == NULL)
+        pi4io_dev = i2c_bus_device_create(i2c_bus, PI4IO_ADDR, 400000);
+        if (pi4io_dev == NULL)
         {
-            printf("pi4io_m_dev create failed\n");
+            printf("pi4io_dev create failed\n");
         }
         else
         {
-            printf("pi4io_m_dev create success\n");
-        }
-        pi4io_b_dev = i2c_bus_device_create(i2c_bus, PI4IO_B_ADDR, 400000);
-        if (pi4io_b_dev == NULL)
-        {
-            printf("pi4io_b_dev create failed\n");
-        }
-        else
-        {
-            printf("pi4io_b_dev create success\n");
+            printf("pi4io_dev create success\n");
         }
 
         uint8_t in_data;
-        // 模组
-        // P0 BTN1
-        // P1 BTN2
-        // P2-P5 NC
-        // P6 SX_ANT_SW
-        // P7 SX_NRST
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_CHIP_RESET, 0xFF);
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_read_byte(pi4io_m_dev, PI4IO_REG_CHIP_RESET, &in_data);
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_IO_DIR, 0b11000000); // 0: input 1: output
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_OUT_H_IM, 0b00111100); // 使用到的引脚关闭High-Impedance
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_PULL_SEL, 0b11000011); // pull up/down select, 0 down, 1 up
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_PULL_EN, 0b11000011); // pull up/down enable, 0 disable, 1 enable
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_IN_DEF_STA, 0b00000011); // P0 P1 默认高电平, 按键按下触发中断
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_INT_MASK, 0b11111100); // P0 P1 中断使能 0 enable, 1 disable
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_OUT_SET, 0b10000000); // 默认输出为0
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        // 底板
-        // P0 Power OFF system
-        // P1 NC
-        // P2 EXT_PWR_EN
-        // P3 NC
-        // P4 NC
+        // P0 TP_RST
+        // P1 OLED_RST
         // P5 VIN_DET
-        // P6 LCD_BL
-        // P7 SYS_LEDG  低电平亮
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_CHIP_RESET, 0xFF);
+        // P6 VOUT_EN
+        // P7 SPK_EN
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_CHIP_RESET, 0xFF);
         vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_read_byte(pi4io_b_dev, PI4IO_REG_CHIP_RESET, &in_data);
+        i2c_bus_read_byte(pi4io_dev, PI4IO_REG_CHIP_RESET, &in_data);
         vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_IO_DIR, 0b11000111); // 0: input 1: output
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_IO_DIR, 0b11000011); // 0: input 1: output
         vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_H_IM, 0b00011000); // 使用到的引脚关闭High-Impedance
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_H_IM, 0b00111000); // 使用到的引脚关闭High-Impedance
         vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_PULL_SEL, 0b10000000); // pull up/down select, 0 down, 1 up
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_PULL_SEL, 0b11000111); // pull up/down select, 0 down, 1 up
         vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_PULL_EN, 0b11111111); // pull up/down enable, 0 disable, 1 enable
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_PULL_EN, 0b11000111); // pull up/down enable, 0 disable, 1 enable
         vTaskDelay(10 / portTICK_PERIOD_MS);
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, 0b11000010); // 默认输出
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_IN_DEF_STA, 0b00000000); // P0 P1 默认高电平, 按键按下触发中断
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_INT_MASK, 0b11111111); // P0 P1 中断使能 0 enable, 1 disable
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, 0b11000011); // 默认输出为0
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 
     static void pi4io_release_all()
     {
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_H_IM, 0xFF);
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_OUT_H_IM, 0xFF);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_H_IM, 0xFF);
     }
 
-    static void pi4io_led_set_level(bool level)
+    static void pi4io_lcd_reset()
     {
         uint8_t in_data;
-        i2c_bus_read_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, &in_data);
-        if (level)
-        {
-            clrbit(in_data, 7);
-        }
-        else
-        {
-            setbit(in_data, 7);
-        }
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, in_data);
-    }
-
-    static void lcd_reset()
-    {
-        uint8_t in_data;
-        i2c_bus_read_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, &in_data);
+        i2c_bus_read_byte(pi4io_dev, PI4IO_REG_OUT_SET, &in_data);
         clrbit(in_data, 1); // LOW
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, in_data);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, in_data);
         vTaskDelay(100 / portTICK_PERIOD_MS);
         setbit(in_data, 1); // HIGH
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, in_data);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, in_data);
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 
-    static void pi4io_lcd_bl_set_level(bool level)
+    static void pi4io_tp_reset()
     {
         uint8_t in_data;
-        i2c_bus_read_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, &in_data);
-        if (level)
-        {
-            setbit(in_data, 6);
-        }
-        else
-        {
-            clrbit(in_data, 6);
-        }
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, in_data);
+        i2c_bus_read_byte(pi4io_dev, PI4IO_REG_OUT_SET, &in_data);
+        clrbit(in_data, 0);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, in_data);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+        setbit(in_data, 0);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, in_data);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 
-    static bool pi4io_vin_has_input()
+    static void pi4io_speaker_enable()
     {
         uint8_t in_data;
-        i2c_bus_read_byte(pi4io_b_dev, PI4IO_REG_IN_STA, &in_data);
+        i2c_bus_read_byte(pi4io_dev, PI4IO_REG_OUT_SET, &in_data);
+        setbit(in_data, 7);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, in_data);
+    }
+
+    static void pi4io_speaker_disable()
+    {
+        uint8_t in_data;
+        i2c_bus_read_byte(pi4io_dev, PI4IO_REG_OUT_SET, &in_data);
+        clrbit(in_data, 7);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, in_data);
+    }
+
+    static uint8_t pi4io_vin_detect()
+    {
+        uint8_t in_data;
+        i2c_bus_read_byte(pi4io_dev, PI4IO_REG_IN_STA, &in_data);
         return getbit(in_data, 5);
     }
 
-    static void pi4io_ext_power_control(bool en)
+    static void pi4io_5V_out_enable()
     {
         uint8_t in_data;
-        i2c_bus_read_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, &in_data);
-        if (en)
-        {
-            setbit(in_data, 2);
-        }
-        else
-        {
-            clrbit(in_data, 2);
-        }
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, in_data);
+        i2c_bus_read_byte(pi4io_dev, PI4IO_REG_OUT_SET, &in_data);
+        setbit(in_data, 6);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, in_data);
     }
 
-    // 关机需要产生高电平信号 100ms ~ 500ms 之间
-    static void pi4io_power_off()
+    static void pi4io_5V_out_disable()
     {
         uint8_t in_data;
-        i2c_bus_read_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, &in_data);
-        in_data |= 0b1;
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, in_data);
-        vTaskDelay(200 / portTICK_PERIOD_MS);
-        in_data &= 0b0;
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, in_data);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
-
-    static void pi4io_check_irq()
-    {
-        uint8_t in_data;
-        i2c_bus_read_byte(pi4io_m_dev, PI4IO_REG_IRQ_STA, &in_data);
-        printf("pi4io_check_irq: %02X\n", in_data);
-    }
-
-    static void button_update()
-    {
-        uint8_t in_data;
-        if (c6_irq_flag)
-        {
-            // printf("c6_irq_flag\n");
-            c6_irq_flag = false;
-            // 读取模组上PI4IO的中断状态
-            i2c_bus_read_byte(pi4io_m_dev, PI4IO_REG_IRQ_STA, &in_data);
-            if (getbit(in_data, 0))
-            {
-                btn1 = true;
-                printf("btn1 pressed\n");
-            }
-
-            if (getbit(in_data, 1))
-            {
-                btn2 = true;
-                printf("btn2 pressed\n");
-            }
-            // 清中断
-            i2c_bus_read_byte(pi4io_m_dev, PI4IO_REG_CHIP_RESET, &in_data);
-        }
+        i2c_bus_read_byte(pi4io_dev, PI4IO_REG_OUT_SET, &in_data);
+        clrbit(in_data, 6);
+        i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, in_data);
     }
 
     /******************************************************************************/
@@ -1022,119 +1029,679 @@ extern "C"
     }
 
     /******************************************************************************/
-    static void sx1262_init()
+    // ES8311 初始化函数
+    static void es8311_codec_init() 
     {
-        // Reset
-        sx1262_reset();
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        // RF Switch
-        sx1262_rf_turn_on();
-
-        LoRaInit();
-
-        // LoRa 配置
-        uint32_t frequencyInHz = LORA_FREQ; // 915MHz
-        int8_t txPowerInDbm = 22;           // 发射功率
-
-        float tcxoVoltage = 3.0;
-        bool useRegulatorLDO = true;
-
-        uint8_t bandwidth = LORA_BW;
-        uint8_t spreadingFactor = LORA_SF;
-        uint8_t codingRate = LORA_CR;
-        uint16_t preambleLength = LORA_PREAMBLE_LEN;
-        uint8_t payloadLen = 0;
-        bool crcOn = true;
-        bool invertIrq = false;
-
-        // LoRaDebugPrint(true);
-        if (LoRaBegin(frequencyInHz, txPowerInDbm, tcxoVoltage, useRegulatorLDO) != 0)
+        // i2c
+        es8311_dev = i2c_bus_device_create(i2c_bus, ES8311_ADDR, 400000);
+        if (es8311_dev == NULL)
         {
-            ESP_LOGE(TAG, "LoRa begin failed");
-            while (1)
+            printf("es8311_dev create failed\n");
+        }
+        else
+        {
+            printf("es8311_dev create success\n");
+        }
+        // i2s
+        if (i2s_keep[0]) {
+            return ;
+        }
+        i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+        i2s_std_config_t std_cfg =
+        {
+            .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
+            .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG((i2s_data_bit_width_t)16, I2S_SLOT_MODE_STEREO),
+            .gpio_cfg =
             {
-                vTaskDelay(10 / portTICK_PERIOD_MS);
+                .mclk = I2S_MCLK_PIN,
+                .bclk = I2S_BCLK_PIN,
+                .ws = I2S_LRCK_PIN,
+                .dout = I2S_DADC_PIN,
+                .din = I2S_DDAT_PIN,
+            },
+        };
+        i2s_keep[0] = (i2s_keep_t *) calloc(1, sizeof(i2s_keep_t));
+        if (i2s_keep[0] == NULL) {
+            return;
+        }
+        i2s_tdm_slot_mask_t slot_mask = (i2s_tdm_slot_mask_t)(I2S_TDM_SLOT0 | I2S_TDM_SLOT1 | I2S_TDM_SLOT2 | I2S_TDM_SLOT3);
+        i2s_tdm_config_t tdm_cfg = 
+        {
+            .clk_cfg  = I2S_TDM_CLK_DEFAULT_CONFIG(16000),
+            .slot_cfg = I2S_TDM_PHILIPS_SLOT_DEFAULT_CONFIG((i2s_data_bit_width_t)16, I2S_SLOT_MODE_STEREO, slot_mask),
+            .gpio_cfg = {
+                .mclk = I2S_MCLK_PIN,
+                .bclk = I2S_BCLK_PIN,
+                .ws = I2S_LRCK_PIN,
+                .dout = I2S_DADC_PIN,
+                .din = I2S_DDAT_PIN,
+            },
+        };
+        tdm_cfg.slot_cfg.total_slot = 4;
+        int ret = i2s_new_channel(&chan_cfg, &i2s_keep[0]->tx_handle, &i2s_keep[0]->rx_handle);
+        if (i2s_out_mode == I2S_COMM_MODE_STD)
+        {
+            ret = i2s_channel_init_std_mode(i2s_keep[0]->tx_handle, &std_cfg);
+        }
+        else 
+        if (i2s_out_mode == I2S_COMM_MODE_TDM) 
+        {
+        ret = i2s_channel_init_tdm_mode(i2s_keep[0]->tx_handle, &tdm_cfg);
+        }
+        if (i2s_in_mode == I2S_COMM_MODE_STD)
+        {
+            ret = i2s_channel_init_std_mode(i2s_keep[0]->rx_handle, &std_cfg);
+        } 
+        else 
+        if (i2s_in_mode == I2S_COMM_MODE_TDM)
+        {
+            ret = i2s_channel_init_tdm_mode(i2s_keep[0]->rx_handle, &tdm_cfg);
+        }
+        i2s_channel_enable(i2s_keep[0]->tx_handle);
+
+        // codec
+        audio_codec_i2s_cfg_t i2s_cfg = {
+            .rx_handle = i2s_keep[0]->rx_handle,
+            .tx_handle = i2s_keep[0]->tx_handle,
+        };
+        const audio_codec_data_if_t *data_if = audio_codec_new_i2s_data(&i2s_cfg);
+
+        audio_codec_i2c_cfg_t i2c_cfg = 
+        {
+            .port = I2C_NUM_0,
+            .addr = ES8311_ADDR,
+        };
+        const audio_codec_ctrl_if_t *out_ctrl_if = audio_codec_new_i2c_ctrl(&i2c_cfg);
+        
+        const audio_codec_gpio_if_t *gpio_if = audio_codec_new_gpio();
+        // New output codec interface
+        es8311_codec_cfg_t es8311_cfg = 
+        {
+            .ctrl_if = out_ctrl_if,
+            .gpio_if = gpio_if,
+            .codec_mode = ESP_CODEC_DEV_WORK_MODE_DAC,
+            .pa_pin = EXT_GPIO3_PIN,
+            .use_mclk = true,
+        };
+        const audio_codec_if_t *out_codec_if = es8311_codec_new(&es8311_cfg);
+        // New output codec device
+        esp_codec_dev_cfg_t dev_cfg = 
+        {
+            .dev_type = ESP_CODEC_DEV_TYPE_IN_OUT, // 设备同时支持录制和播放
+            .codec_if = out_codec_if,              // es8311_codec_new 获取到的接口实现
+            .data_if = data_if,                    // audio_codec_new_i2s_data 获取到的数据接口实现
+        };
+        codec_dev = esp_codec_dev_new(&dev_cfg);
+    }
+
+    // 添加录音函数
+    static esp_err_t record_audio(uint8_t* data, size_t size) 
+    {
+        return esp_codec_dev_read(codec_dev, data, size);
+    }
+
+    // 添加播放函数
+    static esp_err_t play_audio(const uint8_t* data, size_t size) 
+    {
+        return esp_codec_dev_write(codec_dev, (void *)data, size);
+    }
+
+
+    /******************************************************************************/
+    static uint32_t partno_chip_type; // 芯片类型
+    static uint32_t module_id; // 模块ID
+    static uint8_t work_mode; // 工作模式
+    // CST9217 初始化函数
+    static void cst9217_init()
+    {
+        cst9217_dev = i2c_bus_device_create(i2c_bus, CST9217_ADDR, 400000);
+        if (cst9217_dev == NULL)
+        {
+            printf("cst9217_dev create failed\n");
+        }
+        else
+        {
+            printf("cst9217_dev create success\n");
+        }
+        cst9217_read_chip_id();
+
+        cst9217_read_tpinfo();
+    }
+
+    static void cst9217_update()
+    {
+        uint8_t i2c_buf[MAX_POINTS_REPORT*5+5] = {0};
+        uint8_t finger_num = 0;
+
+        // 读取触摸数据
+        if (i2c_bus_read_reg(cst9217_dev, 0xD000, 2, i2c_buf, sizeof(i2c_buf)) != ESP_OK) {
+            printf("Failed to read touch data\n");
+            return;
+        }
+
+        // 验证数据有效性
+        if (i2c_buf[6] != 0xAB) {
+            printf("Invalid touch data header\n");
+            return;
+        }
+
+        finger_num = i2c_buf[5] & 0x7F;
+        if (finger_num > MAX_POINTS_REPORT) {
+            printf("Exceed max finger count: %d\n", finger_num);
+            return;
+        }
+
+        printf("Detected fingers: %d\n", finger_num);
+
+        // 清空之前的触摸数据
+        memset(tp_info, 0, sizeof(tp_info));
+
+        // 解析每个触摸点
+        for (int i = 0; i < finger_num; i++) {
+            uint8_t *data = (i == 0) ? i2c_buf : i2c_buf + 5*i + 2;
+            
+            if (data >= i2c_buf + sizeof(i2c_buf)) {
+                printf("Data overflow detected\n");
+                break;
+            }
+
+            tp_info[i].id = data[0] >> 4;
+            tp_info[i].switch_ = data[0] & 0x0F;
+            tp_info[i].x = ((uint16_t)(data[1]) << 4) | (data[3] >> 4);
+            tp_info[i].y = ((uint16_t)(data[2]) << 4) | (data[3] & 0x0F);
+            tp_info[i].z = (data[3] & 0x1F) + 0x03;
+
+            printf("Finger %d: ID=%d X=%d Y=%d Z=%d\n", 
+                  i+1, tp_info[i].id, tp_info[i].x, tp_info[i].y, tp_info[i].z);
+        }
+
+        // 发送触摸事件到LVGL
+        // if (xSemaphoreTake(touch_mux, pdMS_TO_TICKS(100)) == pdTRUE) {
+        //     esp_lcd_touch_read_data(tp);
+        //     xSemaphoreGive(touch_mux);
+        // }
+    }
+
+    static void cst9217_enter_bootloader()
+    {
+        uint8_t i2c_buf[4] = {0};
+        for (int i = 10;; i+=2)
+        {
+            if (i >= 30)
+            {
+                printf("cst9217_enter_bootloader timeout\n");
+                return;
+            }
+            pi4io_tp_reset();
+            vTaskDelay(i / portTICK_PERIOD_MS);
+            i2c_bus_write_reg(cst9217_dev, 0xA001AA, 3, i2c_buf, 0);
+            vTaskDelay(1 / portTICK_PERIOD_MS);
+            i2c_bus_read_reg(cst9217_dev, 0xA002, 2, i2c_buf, 2);
+            vTaskDelay(1 / portTICK_PERIOD_MS);
+            if(i2c_buf[0] == 0x55 && i2c_buf[1] == 0xB0)
+            {
+                printf("cst9217_enter_bootloader success\n");
+                break;
             }
         }
-        LoRaConfig(spreadingFactor, bandwidth, codingRate, preambleLength, payloadLen, crcOn, invertIrq);
+        i2c_bus_write_reg(cst9217_dev, 0xA00100, 3, i2c_buf, 0);
     }
 
-    static void sx1262_reset()
+    static void cst9217_read_chip_id()
     {
-        uint8_t in_data;
-        i2c_bus_read_byte(pi4io_m_dev, PI4IO_REG_OUT_SET, &in_data);
-        clrbit(in_data, 7); // LOW
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_OUT_SET, in_data);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-        setbit(in_data, 7); // HIGH
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_OUT_SET, in_data);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
-
-    static void sx1262_rf_turn_on()
-    {
-        uint8_t in_data;
-        i2c_bus_read_byte(pi4io_m_dev, PI4IO_REG_OUT_SET, &in_data);
-        setbit(in_data, 6); // HIGH
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_OUT_SET, in_data);
-    }
-
-    static void sx1262_rf_turn_off()
-    {
-        uint8_t in_data;
-        i2c_bus_read_byte(pi4io_m_dev, PI4IO_REG_OUT_SET, &in_data);
-        clrbit(in_data, 6); // LOW
-        i2c_bus_write_byte(pi4io_m_dev, PI4IO_REG_OUT_SET, in_data);
-    }
-
-    // LoRa 发射测试
-    static void sx1262_tx_test()
-    {
-        uint8_t buf[255] = {0}; // Maximum Payload size of SX1261/62/68 is 255
-        TickType_t nowTick = xTaskGetTickCount();
-        int txLen = sprintf((char *)buf, "hello world, this msg from M5's LoRa C6! %" PRIu32, nowTick);
-        ESP_LOGI("LoRa", "sx1262 send: %s", buf);
-
-        // Wait for transmission to complete
-        if (LoRaSend(buf, txLen, SX126x_TXMODE_SYNC) == false)
+        cst9217_enter_bootloader();
+        for (int i = 0; i < 3; i++)
         {
-            ESP_LOGE("LoRa", "LoRaSend fail");
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+            cst9217_read_word_from_mem(1, 0x077C, &partno_chip_type);
+            cst9217_read_word_from_mem(0, 0x7FC0, &module_id);
+            if ((partno_chip_type >> 16) == 0xCACA)
+            {
+                printf("cst9217 read success\n");
+                partno_chip_type &= 0xffff;
+                break;
+            }
+            else
+            {
+                printf("cst9217 read failed, retry\n");
+            }
+        }
+        pi4io_tp_reset();
+        printf("partno_chip_type: 0x%lx\n", partno_chip_type);
+        printf("module_id: 0x%lx\n", module_id);
+        if ((partno_chip_type != 0x9217) && (partno_chip_type != 0x9220))
+        {
+            printf("partno_chip_type error 0x%lx\n", partno_chip_type);
+        }
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+    }
+    
+    static void cst9217_read_tpinfo()
+    {
+        uint8_t i2c_buf[30] = {0};
+
+        // cst9217_set_workmode(0xff, 0);
+        i2c_bus_write_reg(cst9217_dev, 0xD101, 2, i2c_buf, 0);
+        vTaskDelay(5 / portTICK_PERIOD_MS);
+
+        i2c_bus_read_reg(cst9217_dev, 0xD1F4, 2, i2c_buf, 28);
+        printf("firmware_project_id: 0x%04x\n", i2c_buf[17] << 8 | i2c_buf[16]);
+        printf("firmware_ic_type: 0x%04x\n", i2c_buf[19] << 8 | i2c_buf[18]);
+        printf("firmware_version: 0x%04x\n", i2c_buf[23] << 24 | i2c_buf[22] << 16 | i2c_buf[21] << 8 | i2c_buf[20]);
+        printf("tx_num: %d\n", i2c_buf[1]);
+        printf("rx_num: %d\n", i2c_buf[2]);
+        printf("key_num: %d\n", i2c_buf[3]);
+        printf("res_x: %d\n", i2c_buf[5] << 8 | i2c_buf[4]);
+        printf("res_y: %d\n", i2c_buf[7] << 8 | i2c_buf[6]);
+        printf("fw_checksum: 0x%04x\n", i2c_buf[27] << 8 | i2c_buf[26]);
+        
+        cst9217_set_workmode(NOMAL_MODE, 1);
+    }
+
+    static void cst9217_set_workmode(enum work_mode mode, uint8_t enable)
+    {
+        uint8_t i2c_buf[4] = {0};
+        work_mode = mode;
+        if(mode != NOMAL_MODE)
+        {
+            printf("cst9217_set_workmode: %d\n", mode);
+        }
+        for(int i = 0; i < 3; i++)
+        {
+            i2c_bus_write_reg(cst9217_dev, 0xD11E, 2, i2c_buf, 0);
+            vTaskDelay(5 / portTICK_PERIOD_MS);
+            i2c_bus_write_reg(cst9217_dev, 0x0002, 2, i2c_buf, 2);
+            if(i2c_buf[1] == 0x1E)
+            {
+                break;
+            }
+        }
+        switch(mode)
+        {
+            case NOMAL_MODE:
+                i2c_bus_write_reg(cst9217_dev, 0xD109, 2, i2c_buf, 0);
+                break;
+            case GESTURE_MODE:
+                i2c_bus_write_reg(cst9217_dev, 0xD104, 2, i2c_buf, 0);
+                break;
+            case LP_MODE:
+                i2c_bus_write_reg(cst9217_dev, 0xD107, 2, i2c_buf, 0);
+                break;
+            case DIFF_MODE:
+                i2c_bus_write_reg(cst9217_dev, 0xD10D, 2, i2c_buf, 0);
+                break;
+            case RAWDATA_MODE:
+                i2c_bus_write_reg(cst9217_dev, 0xD10A, 2, i2c_buf, 0);
+                break;
+            case BASELINE_MODE:
+                i2c_bus_write_reg(cst9217_dev, 0xD108, 2, i2c_buf, 0);
+                break;
+            case CALIBRATE_MODE:
+                i2c_bus_write_reg(cst9217_dev, 0xD10B, 2, i2c_buf, 0);
+                break;
+            case FAC_TEST_MODE:
+                i2c_bus_write_reg(cst9217_dev, 0xD114, 2, i2c_buf, 0);
+                break;
+            case DEEPSLEEP:
+                i2c_bus_write_reg(cst9217_dev, 0xD105, 2, i2c_buf, 0);
+                break;
+            default:
+                printf("cst9217_set_workmode: %d\n", mode);
+                mode = NOMAL_MODE;
+                break;
+        }
+    }
+
+    static void cst9217_read_word_from_mem(uint8_t type, uint16_t addr, uint32_t *value)
+    {
+        uint8_t i2c_buf[4] = {0};
+        i2c_buf[0] = type;
+        i2c_bus_write_reg(cst9217_dev, 0xA010, 2, i2c_buf, 1);
+
+        i2c_buf[0] = addr;
+        i2c_buf[1] = addr >> 8;
+        i2c_bus_write_reg(cst9217_dev, 0xA00C, 2, i2c_buf, 2);
+
+        i2c_buf[0] = 0xE4;
+        i2c_bus_write_reg(cst9217_dev, 0xA004, 2, i2c_buf, 1);
+
+        for(int i = 0;; i++)
+        {
+            if (i >= 100)
+            {
+                printf("cst9217_read_word_from_mem timeout\n");
+                return;
+            }
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+            i2c_bus_read_reg(cst9217_dev, 0xA004, 2, i2c_buf, 1);
+            if (i2c_buf[0] == 0x00)
+            {
+                break;
+            }
+        }
+        i2c_bus_read_reg(cst9217_dev, 0xA018, 2, i2c_buf, 4);
+        *value = (i2c_buf[0] << 24) | (i2c_buf[1] << 16) | (i2c_buf[2] << 8) | i2c_buf[3];
+    }
+    
+    // static void cst9217_read_data(uint8_t *data, uint16_t len)
+    // {
+        
+    // }
+
+    // static void cst9217_write_data(uint8_t *data, uint8_t reg_len, uint16_t len)
+    // {
+    //     uint8_t cmd_len = reg_len&0x0F;
+    //     if(cmd_len > 4) printf("cst9217_write cmd_len error: %d\n", cmd_len);
+    //     uint8_t addr_buf[4] = {0};
+    //     for(int i = 0; i < cmd_len; i++) 
+    //     {
+    //         addr_buf[cmd_len-1-i] = (cmd_len >> (i*8)) & 0xFF; // 大端存储地址
+    //     }
+    //     i2c_bus_write_reg(cst9217_dev, reg_addr, reg_len, data, len);
+    // }
+
+    // static void cst9217_wr_reg(uint32_t reg_addr, uint8_t reg_len, uint8_t *rbuf, uint16_t rlen)
+    // {
+
+    // }
+    
+
+    /******************************************************************************/
+    static bool example_notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
+    {
+        lv_disp_drv_t *disp_driver = (lv_disp_drv_t *)user_ctx;
+        lv_disp_flush_ready(disp_driver);
+        return false;
+    }
+    
+    static void example_touch_isr_cb(esp_lcd_touch_handle_t tp)
+    {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xSemaphoreGiveFromISR(touch_mux, &xHigherPriorityTaskWoken);
+
+        if (xHigherPriorityTaskWoken) {
+            portYIELD_FROM_ISR();
+        }
+    }
+    
+    static void example_lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
+    {
+        esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t) drv->user_data;
+        const int offsetx1 = area->x1;
+        const int offsetx2 = area->x2;
+        const int offsety1 = area->y1;
+        const int offsety2 = area->y2;
+
+        // 将缓冲区的内容复制到显示的特定区域
+        esp_lcd_panel_draw_bitmap(panel_handle, offsetx1, offsety1, offsetx2 + 1, offsety2 + 1, color_map);
+    }
+
+    static void example_lvgl_rounder_cb(struct _lv_disp_drv_t *disp_drv, lv_area_t *area)
+    {
+        uint16_t x1 = area->x1;
+        uint16_t x2 = area->x2;
+        uint16_t y1 = area->y1;
+        uint16_t y2 = area->y2;
+
+        // round the start of coordinate down to the nearest 2M number
+        area->x1 = (x1 >> 1) << 1;
+        area->y1 = (y1 >> 1) << 1;
+        // round the end of coordinate up to the nearest 2N+1 number
+        area->x2 = ((x2 >> 1) << 1) + 1;
+        area->y2 = ((y2 >> 1) << 1) + 1;
+        return;
+    }
+
+    /* 在 LVGL 中旋转屏幕时，旋转显示和触摸。 更新驱动程序参数时调用 */
+    static void example_lvgl_update_cb(lv_disp_drv_t *drv)
+    {
+        esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t) drv->user_data;
+
+        switch (drv->rotated) {
+        case LV_DISP_ROT_NONE:
+            // 旋转液晶显示屏
+            esp_lcd_panel_swap_xy(panel_handle, false);
+            esp_lcd_panel_mirror(panel_handle, true, false);
+            // 旋转液晶触摸
+            esp_lcd_touch_set_mirror_y(tp, false);
+            esp_lcd_touch_set_mirror_x(tp, false);
+            break;
+        case LV_DISP_ROT_90:
+            // 旋转液晶显示屏
+            esp_lcd_panel_swap_xy(panel_handle, true);
+            esp_lcd_panel_mirror(panel_handle, true, true);
+            // 旋转液晶触摸
+            esp_lcd_touch_set_mirror_y(tp, false);
+            esp_lcd_touch_set_mirror_x(tp, false);
+            break;
+        case LV_DISP_ROT_180:
+            // 旋转液晶显示屏
+            esp_lcd_panel_swap_xy(panel_handle, false);
+            esp_lcd_panel_mirror(panel_handle, false, true);
+            // 旋转液晶触摸
+            esp_lcd_touch_set_mirror_y(tp, false);
+            esp_lcd_touch_set_mirror_x(tp, false);
+            break;
+        case LV_DISP_ROT_270:
+            // 旋转液晶显示屏
+            esp_lcd_panel_swap_xy(panel_handle, true);
+            esp_lcd_panel_mirror(panel_handle, false, false);
+            // 旋转液晶触摸
+            esp_lcd_touch_set_mirror_y(tp, false);
+            esp_lcd_touch_set_mirror_x(tp, false);
+            break;
+        }
+    }
+
+    static void example_increase_lvgl_tick(void *arg)
+    {
+        /* 告诉 LVGL 已经过去了多少毫秒*/
+        lv_tick_inc(EXAMPLE_LVGL_TICK_PERIOD_MS);
+    }
+
+    static void example_lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
+    {
+        esp_lcd_touch_handle_t tp = (esp_lcd_touch_handle_t)drv->user_data;
+        assert(tp);
+
+        uint16_t tp_x;
+        uint16_t tp_y;
+        uint8_t tp_cnt = 0;
+        /* 将触摸控制器中的数据读取到内存中 */
+        if (xSemaphoreTake(touch_mux, 0) == pdTRUE) {
+            esp_lcd_touch_read_data(tp);
         }
 
-        int lost = GetPacketLost();
-        if (lost != 0)
-        {
-            ESP_LOGW("LoRa", "%d packets lost", lost);
+        /* 从触摸控制器读取数据 */
+        bool tp_pressed = esp_lcd_touch_get_coordinates(tp, &tp_x, &tp_y, NULL, &tp_cnt, 1);
+        if (tp_pressed && tp_cnt > 0) {
+            data->point.x = tp_x;
+            data->point.y = tp_y;
+            data->state = LV_INDEV_STATE_PRESSED;
+            ESP_LOGD(TAG, "Touch position: %d,%d", tp_x, tp_y);
+        } else {
+            data->state = LV_INDEV_STATE_RELEASED;
         }
     }
 
-    // LoRa 接收测试
-    static void sx1262_rx_test()
+    static bool example_lvgl_lock(int timeout_ms)
     {
-        uint8_t buf[255] = {0}; // Maximum Payload size of SX1261/62/68 is 255
-        uint8_t rxLen = LoRaReceive(buf, sizeof(buf));
-        if (rxLen > 0)
-        {
-            ESP_LOGI("LoRa", "%d byte packet received:[%.*s]", rxLen, rxLen, buf);
-            int8_t rssi, snr;
-            GetPacketStatus(&rssi, &snr);
-            ESP_LOGI("LoRa", "rssi=%d[dBm] snr=%d[dB]\r\n", rssi, snr);
+        assert(lvgl_mux && "bsp_display_start must be called first");
 
-            // Just for test
-            led_blink = !led_blink;
-            pi4io_led_set_level(led_blink);
+        const TickType_t timeout_ticks = (timeout_ms == -1) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+        return xSemaphoreTake(lvgl_mux, timeout_ticks) == pdTRUE;
+    }
+
+    static void example_lvgl_unlock(void)
+    {
+        assert(lvgl_mux && "bsp_display_start must be called first");
+        xSemaphoreGive(lvgl_mux);
+    }
+
+    static void lcd_init()
+    {
+        ESP_LOGI(TAG, "Initialize SPI bus");
+        const spi_bus_config_t buscfg = CO5300_PANEL_BUS_QSPI_CONFIG(QSPI_SCLK_PIN,
+                                                                    QSPI_D0_PIN,
+                                                                    QSPI_D1_PIN,
+                                                                    QSPI_D2_PIN,
+                                                                    QSPI_D3_PIN,
+                                                                    EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES * LCD_BIT_PER_PIXEL / 8);
+        ESP_ERROR_CHECK(spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_CH_AUTO));
+
+        ESP_LOGI(TAG, "Install panel IO");
+        esp_lcd_panel_io_handle_t io_handle = NULL;
+        const esp_lcd_panel_io_spi_config_t io_config = CO5300_PANEL_IO_QSPI_CONFIG(QSPI_CS_PIN, example_notify_lvgl_flush_ready, &disp_drv);
+        
+        co5300_vendor_config_t vendor_config = {
+            .flags = {
+                .use_qspi_interface = 1,
+            },
+        };
+
+        // 将 LCD 连接到 SPI 总线
+        ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST, &io_config, &io_handle));
+
+        esp_lcd_panel_handle_t panel_handle = NULL;
+        const esp_lcd_panel_dev_config_t panel_config = {
+            .reset_gpio_num = QSPI_RST_PIN,
+            .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,
+            .bits_per_pixel = LCD_BIT_PER_PIXEL,
+            .vendor_config = &vendor_config,
+        };
+
+        ESP_LOGI(TAG, "Install CO5300 panel driver");
+        ESP_ERROR_CHECK(esp_lcd_new_panel_co5300(io_handle, &panel_config, &panel_handle));
+        // ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
+        ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
+        ESP_ERROR_CHECK(esp_lcd_panel_set_gap(panel_handle, 16, 0));
+        ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
+
+        // ESP_LOGI(TAG, "Install CST9217 touch driver");
+        // esp_lcd_panel_io_handle_t tp_io_handle = NULL;
+        // const esp_lcd_panel_io_i2c_config_t tp_io_config = {
+        //     .dev_addr = CST9217_ADDR,
+        //     .control_phase_bytes = 1,
+        //     .dc_bit_offset = 0,
+        //     .lcd_cmd_bits = 8,
+        //     .lcd_param_bits = 0,
+        //     .flags = {
+        //         .dc_low_on_data = 0,
+        //         .disable_control_phase = 1,
+        //     }
+        // };
+
+        // ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(TOUCH_HOST, &tp_io_config, &tp_io_handle));
+
+        // touch_mux = xSemaphoreCreateBinary();
+        // assert(touch_mux);
+
+        // const esp_lcd_touch_config_t tp_cfg = {
+        //     .x_max = EXAMPLE_LCD_H_RES,
+        //     .y_max = EXAMPLE_LCD_V_RES,
+        //     .rst_gpio_num = TOUCH_RST_PIN,
+        //     .int_gpio_num = TOUCH_INT_PIN,
+        //     .levels = {
+        //         .reset = 0,
+        //         .interrupt = 0,
+        //     },
+        //     .flags = {
+        //         .swap_xy = 0,
+        //         .mirror_x = 0,
+        //         .mirror_y = 0,
+        //     },
+        //     .interrupt_callback = example_touch_isr_cb,
+        // };
+
+        // ESP_LOGI(TAG, "Initialize touch controller cst9217");
+        // ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_cst9217(tp_io_handle, &tp_cfg, &tp));
+
+        // ESP_LOGI(TAG, "Initialize touch controller cst9217");
+        // ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_cst816s(tp_io_handle, &tp_cfg, &tp));
+
+        ESP_LOGI(TAG, "Initialize LVGL library");
+        lv_init();
+        // 分配 LVGL 使用的绘制缓冲区, 建议选择绘制缓冲区的大小至少为屏幕大小的 1/10
+        lv_color_t *buf1 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * 50 * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+        assert(buf1);
+        lv_color_t *buf2 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * 50 * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+        assert(buf2);
+        // 初始化 LVGL 绘制缓冲区
+        lv_disp_draw_buf_init(&disp_buf, buf1, buf2, EXAMPLE_LCD_H_RES * 50 * sizeof(lv_color_t));
+
+        ESP_LOGI(TAG, "Register display driver to LVGL");
+        lv_disp_drv_init(&disp_drv);
+        disp_drv.hor_res = EXAMPLE_LCD_H_RES;
+        disp_drv.ver_res = EXAMPLE_LCD_V_RES;
+        disp_drv.flush_cb = example_lvgl_flush_cb;
+        disp_drv.rounder_cb = example_lvgl_rounder_cb;
+        disp_drv.drv_update_cb = example_lvgl_update_cb;
+        disp_drv.draw_buf = &disp_buf;
+        disp_drv.user_data = panel_handle;
+        lv_disp_t *disp = lv_disp_drv_register(&disp_drv);
+
+        ESP_LOGI(TAG, "Install LVGL tick timer");
+        // LVGL 的 Tick 接口（使用 esp_timer 生成 2ms 周期性事件）
+        const esp_timer_create_args_t lvgl_tick_timer_args = {
+            .callback = &example_increase_lvgl_tick,
+            .name = "lvgl_tick"
+        };
+        esp_timer_handle_t lvgl_tick_timer = NULL;
+        ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
+        ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, EXAMPLE_LVGL_TICK_PERIOD_MS * 1000));
+
+        // static lv_indev_drv_t indev_drv;    // 输入设备驱动程序（触摸）
+        // lv_indev_drv_init(&indev_drv);
+        // indev_drv.type = LV_INDEV_TYPE_POINTER;
+        // indev_drv.disp = disp;
+        // indev_drv.read_cb = example_lvgl_touch_cb;
+        // indev_drv.user_data = tp;
+        
+        // lv_indev_drv_register(&indev_drv);
+
+        lvgl_mux = xSemaphoreCreateMutex();
+        assert(lvgl_mux);
+        xTaskCreate(example_lvgl_port_task, "LVGL", EXAMPLE_LVGL_TASK_STACK_SIZE, NULL, EXAMPLE_LVGL_TASK_PRIORITY, NULL);
+
+        ESP_LOGI(TAG, "Display LVGL demos");
+        if (example_lvgl_lock(-1)) {
+            // lv_demo_widgets();      /* 小部件示例 */
+            // lv_demo_music();        /* 类似智能手机的现代音乐播放器演示 */
+            // lv_demo_stress();       /* LVGL 压力测试 */
+            // lv_demo_benchmark();    /* 用于测量 LVGL 性能或比较不同设置的演示 */
+            ui_init();
+            // 释放互斥锁
+            example_lvgl_unlock();
         }
     }
+
+    static void example_lvgl_port_task(void *arg)
+    {
+        ESP_LOGI(TAG, "Starting LVGL task");
+        uint32_t task_delay_ms = EXAMPLE_LVGL_TASK_MAX_DELAY_MS;
+        while (1) {
+            // 由于 LVGL API 不是线程安全的，因此锁定互斥体
+            if (example_lvgl_lock(-1)) {
+                task_delay_ms = lv_timer_handler();
+                // 释放互斥锁
+                example_lvgl_unlock();
+            }
+            if (task_delay_ms > EXAMPLE_LVGL_TASK_MAX_DELAY_MS) {
+                task_delay_ms = EXAMPLE_LVGL_TASK_MAX_DELAY_MS;
+            } else if (task_delay_ms < EXAMPLE_LVGL_TASK_MIN_DELAY_MS) {
+                task_delay_ms = EXAMPLE_LVGL_TASK_MIN_DELAY_MS;
+            }
+            vTaskDelay(pdMS_TO_TICKS(task_delay_ms));
+        }
+    }
+
     /******************************************************************************/
     // AW32001	Battery Mode
     // BQ27220	Sleep Mode
     // BMI270	Lowest Power Mode
-    // PI4IO(底板)	BL off & LED off & EXT PWR off
-    // PI4IO(模组)	LoRa RF off
-    // LCD	Sleep Mode
+    // PI4IO	BL off & LED off & EXT PWR off
+    // LCD	    Sleep Mode
     // Touch	Sleep Mode?
-    // SX1262	Sleep Mode
     static void c6_enter_light_sleep_mode()
     {
         printf("c6_enter_light_sleep_mode\r\n");
@@ -1159,18 +1726,10 @@ extern "C"
         i2c_bus_write_byte(bmi270_dev, 0x7D, 0x00);
 
         // Check IRQ
-        printf("IRQ G7 level: %d\n", gpio_get_level(C6_IRQ_PIN));
+        printf("IRQ G7 level: %d\n", gpio_get_level(TP_INT_IRQ_PIN));
 
         // PI4IO
-        i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, 0b10000000); // P7 HIGH
-
-        // SX1262
-        SetStandby(SX126X_STANDBY_XOSC);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        sx1262_rf_turn_off();
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-        SetSleep(SX126X_SLEEP_START_COLD | SX126X_SLEEP_RTC_OFF);
-        gpio_hold_en((gpio_num_t)CONFIG_NSS_GPIO); // 360uA  // !重要
+        // i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, 0b10000000); // P7 HIGH
 
         vTaskDelay(100 / portTICK_PERIOD_MS);
 
@@ -1231,86 +1790,32 @@ extern "C"
         }
     }
 
-    static void beep_init() {
-        // Prepare and then apply the LEDC PWM timer configuration
-        ledc_timer_config_t ledc_timer;
-        ledc_timer.speed_mode       = LEDC_MODE;
-        ledc_timer.duty_resolution  = LEDC_DUTY_RES;
-        ledc_timer.timer_num        = LEDC_TIMER;
-        ledc_timer.freq_hz          = LEDC_FREQUENCY;  // Set output frequency at 4 kHz
-        ledc_timer.clk_cfg          = LEDC_AUTO_CLK;
-        ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
-
-        // Prepare and then apply the LEDC PWM channel configuration
-        ledc_channel_config_t ledc_channel;
-        ledc_channel.speed_mode     = LEDC_MODE;
-        ledc_channel.channel        = LEDC_CHANNEL;
-        ledc_channel.timer_sel      = LEDC_TIMER;
-        ledc_channel.intr_type      = LEDC_INTR_DISABLE;
-        ledc_channel.gpio_num       = LEDC_OUTPUT_IO;
-        ledc_channel.duty           = 0; // Set duty to 0%
-        ledc_channel.hpoint         = 0;
-        ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
-    }
-
-    static void beep_on() {
-        ledc_set_freq(LEDC_MODE, LEDC_TIMER, 1000);
-        ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, LEDC_DUTY);
-        ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
-    }
-
-    static void beep_off() {
-        ledc_set_freq(LEDC_MODE, LEDC_TIMER, 1000);
-        ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, 0);
-        ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
-    }
-
-    static void grvoe_i2c_test() {
-        // 删除
-        i2c_bus_device_delete(&pi4io_b_dev);
-        i2c_bus_device_delete(&pi4io_m_dev);
-        i2c_bus_delete(&i2c_bus);
-        // 重新初始化
+    /******************************************************************************/
+    static void grove_i2c_test() {
+        printf("grove_i2c_test\n");
         i2c_config_t conf;
         conf.mode = I2C_MODE_MASTER;
-        conf.sda_io_num = GROVE_OUT_PIN;
-        conf.scl_io_num = GROVE_IN_PIN;
+        conf.sda_io_num = GROVE_3_PIN;
+        conf.scl_io_num = GROVE_4_PIN;
         conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
         conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
         conf.master.clk_speed = 400000;
         conf.clk_flags = 0;
-        i2c_bus = i2c_bus_create(I2C_NUM_0, &conf);
+        grove_i2c_bus = i2c_bus_create(I2C_NUM_1, &conf);
 
         vTaskDelay(1000 / portTICK_PERIOD_MS);
-        i2c_bus_scan(i2c_bus, NULL, 0);
 
-        while (1)
+        printf("grove_i2c_test scan\n");
+        uint8_t addr[128] = {0};
+        i2c_bus_scan(grove_i2c_bus, addr, 0);
+        for (int i = 0; i < 128; i++) 
         {
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
+            if (addr[i] != 0) 
+            {
+                printf("grove found device at address 0x%02X\n", addr[i]);
+            }
         }
-    }
 
-    static void hat_gpio_init() {
-        gpio_config_t io_conf;
-        io_conf.intr_type = GPIO_INTR_DISABLE;
-        io_conf.mode = GPIO_MODE_OUTPUT;
-        io_conf.pin_bit_mask = 1 << HAT_PIN_1 | 1 << HAT_PIN_2 | 1 << HAT_PIN_3;
-        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-        gpio_config(&io_conf);
-    }
-
-    static void hat_gpio_blink() {
-        if (hat_gpio_flag) {
-            hat_gpio_flag = false;
-            gpio_set_level(HAT_PIN_1, 1);
-            gpio_set_level(HAT_PIN_2, 1);
-            gpio_set_level(HAT_PIN_3, 1);
-        } else {
-            hat_gpio_flag = true;
-            gpio_set_level(HAT_PIN_1, 0);
-            gpio_set_level(HAT_PIN_2, 0);
-            gpio_set_level(HAT_PIN_3, 0);
-        }
+        i2c_bus_delete(&grove_i2c_bus);
     }
 }

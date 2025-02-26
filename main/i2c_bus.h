@@ -235,6 +235,15 @@ esp_err_t i2c_bus_write_bit(i2c_bus_device_handle_t dev_handle, uint8_t mem_addr
  */
 esp_err_t i2c_bus_write_bits(i2c_bus_device_handle_t dev_handle, uint8_t mem_address, uint8_t bit_start, uint8_t length, uint8_t data);
 
+/**
+ * @brief 通用寄存器读写函数（支持1-4字节寄存器地址）
+ * @param reg_len 寄存器地址长度（低4位）| 地址自增标志（最高位）
+ *                0x0F: 地址长度掩码（1-4字节）
+ *                0x80: 地址自增时使用大端模式（默认小端自增）
+ */
+esp_err_t i2c_bus_write_reg(i2c_bus_device_handle_t dev_handle, uint32_t reg_addr, uint8_t reg_len, const uint8_t *data, size_t data_len);
+esp_err_t i2c_bus_read_reg(i2c_bus_device_handle_t dev_handle, uint32_t reg_addr, uint8_t reg_len, uint8_t *data, size_t data_len);
+
 /**************************************** Public Functions (Low level)*********************************************/
 
 /**
@@ -288,6 +297,38 @@ esp_err_t i2c_bus_write_reg16(i2c_bus_device_handle_t dev_handle, uint16_t mem_a
  *     - ESP_ERR_TIMEOUT Operation timeout because the bus is busy.
  */
 esp_err_t i2c_bus_read_reg16(i2c_bus_device_handle_t dev_handle, uint16_t mem_address, size_t data_len, uint8_t *data);
+
+/**
+ * @brief Write date to an i2c device with 32-bit internal reg/mem address
+ *
+ * @param dev_handle I2C device handle
+ * @param mem_address The internal 32-bit reg/mem address to write to, set to NULL_I2C_MEM_ADDR if no internal address.
+ * @param data_len Number of bytes to write
+ * @param data Pointer to the bytes to write.
+ * @return esp_err_t
+ *     - ESP_OK Success
+ *     - ESP_ERR_INVALID_ARG Parameter error
+ *     - ESP_FAIL Sending command error, slave doesn't ACK the transfer.
+ *     - ESP_ERR_INVALID_STATE I2C driver not installed or not in master mode.
+ *     - ESP_ERR_TIMEOUT Operation timeout because the bus is busy.
+ */
+esp_err_t i2c_bus_write_reg32(i2c_bus_device_handle_t dev_handle, uint32_t mem_address, size_t data_len, const uint8_t *data);
+
+/**
+ * @brief Read date from i2c device with 32-bit internal reg/mem address
+ *
+ * @param dev_handle I2C device handle
+ * @param mem_address The internal 32-bit reg/mem address to read from, set to NULL_I2C_MEM_ADDR if no internal address.
+ * @param data_len Number of bytes to read
+ * @param data Pointer to a buffer to save the data that was read
+ * @return esp_err_t
+ *     - ESP_OK Success
+ *     - ESP_ERR_INVALID_ARG Parameter error
+ *     - ESP_FAIL Sending command error, slave doesn't ACK the transfer.
+ *     - ESP_ERR_INVALID_STATE I2C driver not installed or not in master mode.
+ *     - ESP_ERR_TIMEOUT Operation timeout because the bus is busy.
+ */
+esp_err_t i2c_bus_read_reg32(i2c_bus_device_handle_t dev_handle, uint32_t mem_address, size_t data_len, uint8_t *data);
 
 #ifdef __cplusplus
 }
