@@ -13,8 +13,6 @@ extern "C"
 #include "driver/i2c.h"
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
-#include "driver/i2s_std.h"
-#include "driver/i2s_tdm.h"
 #include "esp_timer.h"
 #include "esp_sleep.h"
 #include "driver/rtc_io.h"
@@ -26,6 +24,9 @@ extern "C"
 #include "i2c_bus.h"
 #include "bmi270.h"
 #include "ir_nec_encoder.h"
+
+#include "driver/i2s.h"
+#include "es8311.h"
 
 #include "soc/soc_caps.h"
 #include "esp_codec_dev.h"
@@ -71,10 +72,9 @@ extern "C"
 // speaker and mic ES8311
 #define I2S_MCLK_PIN (gpio_num_t)18
 #define I2S_BCLK_PIN (gpio_num_t)17
-#define I2S_DADC_PIN (gpio_num_t)16
+#define I2S_DADC_IN_PIN (gpio_num_t)16
 #define I2S_LRCK_PIN (gpio_num_t)15
-#define I2S_DDAT_PIN (gpio_num_t)14
-#define I2S_MAX_KEEP SOC_I2S_NUM
+#define I2S_DDAC_OUT_PIN (gpio_num_t)14
 
 // grove
 #define GROVE_3_PIN EXT_GPIO9_PIN
@@ -171,7 +171,7 @@ extern "C"
     i2c_bus_device_handle_t pi4io_dev = NULL;
     static bool led_blink = false;
     static uint64_t last_blink_time = 0;
-    static bool btn1, btn2 = false;
+    static uint8_t btn1, btn2 = 0;
     static void pi4io_init();
     static void pi4io_lcd_reset();
     static void pi4io_tp_reset();
@@ -183,17 +183,11 @@ extern "C"
 
     // ES8311
     i2c_bus_device_handle_t es8311_dev = NULL;
-    esp_codec_dev_handle_t codec_dev = NULL;
-    typedef struct {
-        i2s_chan_handle_t tx_handle;
-        i2s_chan_handle_t rx_handle;
-    } i2s_keep_t;
-    static i2s_comm_mode_t i2s_in_mode = I2S_COMM_MODE_STD;
-    static i2s_comm_mode_t i2s_out_mode = I2S_COMM_MODE_STD;
-    static i2s_keep_t *i2s_keep[I2S_MAX_KEEP];
-    static void es8311_codec_init();
-    static esp_err_t record_audio(uint8_t* data, size_t size);
-    static esp_err_t play_audio(const uint8_t* data, size_t size);
+    static uint8_t play_flag = 2;
+    static void es8311_init();
+    static void record_and_play_task(void *arg);
+    extern const uint8_t test_pcm_start[] asm("_binary_test_pcm_start");
+    extern const uint8_t test_pcm_end[]   asm("_binary_test_pcm_end");
 
     // BQ27220
     i2c_bus_device_handle_t bq27220_dev = NULL;
@@ -330,7 +324,7 @@ extern "C"
 
         // IO扩展
         pi4io_init();
-        pi4io_speaker_enable();
+        // pi4io_speaker_disable();
 
         // 充电管理
         aw32001_init();
@@ -346,7 +340,7 @@ extern "C"
         bmi270_dev_init();
 
         // ES8311 初始化
-        es8311_codec_init();
+        es8311_init();
 
         // 触摸
         cst9217_init();
@@ -356,32 +350,6 @@ extern "C"
 
         // c6_enter_light_sleep_mode();
         // c6_enter_deep_sleep_mode();
-        
-        // 分配音频缓冲区
-        uint8_t* audio_buffer = (uint8_t*)malloc(10240);
-
-
-        {
-            // 保持编解码器常开
-            esp_codec_dev_sample_info_t fs = {
-                .bits_per_sample = 16,
-                .channel = 2,
-                .sample_rate = 16000,
-            };
-            esp_codec_dev_open(codec_dev, &fs);
-            // 生成1kHz正弦波
-            const int samples = 1024;
-            int16_t *wave = (int16_t *)malloc(samples * sizeof(int16_t));
-            for (int i = 0; i < samples; i++) {
-                wave[i] = 32767 * sin(2 * M_PI * 1000 * i / 16000);
-            }
-            
-            for (int i = 0; i < 3; i++) {
-                esp_codec_dev_write(codec_dev, (uint8_t *)wave, samples * sizeof(int16_t));
-            }
-            free(wave);
-        }
-
         
         while (1)
         {
@@ -412,39 +380,22 @@ extern "C"
             // 按键
             if (btn1)
             {
-                btn1 = false;
                 printf("btn1 pressed\n");
-                
-
-                // 设置增益和音量
-                esp_codec_dev_set_in_gain(codec_dev, 50.0); // 提高麦克风增益
-                esp_codec_dev_set_out_vol(codec_dev, 80.0); // 提高音量
-
-                // 录音3秒
-                uint32_t start = esp_timer_get_time();
-                size_t total_read = 0;
-                while ((esp_timer_get_time() - start) < 3000000) {
-                    esp_err_t ret = esp_codec_dev_read(codec_dev, audio_buffer, 10240);
-                    if (ret == ESP_OK) {
-                        total_read += 10240;
-                        break;
-                    }
-                }
-                printf("Recorded %d bytes\n", total_read);
-
-                // 回放录音
-                size_t remain = total_read;
-                uint8_t *play_ptr = audio_buffer;
-                while (remain > 0) {
-                    size_t write_size = (remain > 1024) ? 1024 : remain;
-                    esp_codec_dev_write(codec_dev, play_ptr, write_size);
-                    play_ptr += write_size;
-                    remain -= write_size;
-                }
-            } else if (btn2)
+                play_flag = (play_flag!=0)?0:1;
+                printf("test enable = %d\n", play_flag);
+                // es8311_test(play_flag);
+                btn1 = 0;
+            } 
+            if (btn2)
             {
-                btn2 = false;
                 printf("btn2 pressed\n");
+                
+                size_t bytes_written = 0;
+                printf("start play\n");
+                i2s_write(I2S_NUM_0, test_pcm_start, test_pcm_end - test_pcm_start, &bytes_written, portMAX_DELAY);
+                i2s_zero_dma_buffer(I2S_NUM_0);
+                printf("end play\n");
+                btn2 = 0;
             }
 
             if (touch_irq_flag)
@@ -464,8 +415,6 @@ extern "C"
 
             vTaskDelay(10 / portTICK_PERIOD_MS);
         }
-        
-        free(audio_buffer);
     }
 
     /******************************************************************************/
@@ -503,7 +452,7 @@ extern "C"
     {
         printf("c6_global_irq_init\n");
         gpio_config_t io_conf;
-        io_conf.intr_type = GPIO_INTR_ANYEDGE;
+        io_conf.intr_type = GPIO_INTR_POSEDGE;
         io_conf.mode = GPIO_MODE_INPUT;
         io_conf.pin_bit_mask = (1 << USER_BUTTON1_PIN) | (1 << USER_BUTTON2_PIN) | (1 << TP_INT_IRQ_PIN) /* | 1 << IMU_IRQ_PIN*/;
         io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
@@ -526,12 +475,12 @@ extern "C"
         else 
         if ((uint32_t)arg == USER_BUTTON1_PIN)
         {
-            btn1 = true;
+            btn1 = 1;
         }
         else 
         if ((uint32_t)arg == USER_BUTTON2_PIN)
         {
-            btn2 = true;
+            btn2 = 1;
         }
         // else if ((uint32_t)arg == IMU_IRQ_PIN)
         // {
@@ -1030,120 +979,98 @@ extern "C"
 
     /******************************************************************************/
     // ES8311 初始化函数
-    static void es8311_codec_init() 
+    static void es8311_init() 
     {
+        ESP_LOGI(TAG, "es8311_init");
         // i2c
         es8311_dev = i2c_bus_device_create(i2c_bus, ES8311_ADDR, 400000);
         if (es8311_dev == NULL)
         {
-            printf("es8311_dev create failed\n");
+            ESP_LOGE(TAG, "es8311_dev i2c create failed");
         }
         else
         {
-            printf("es8311_dev create success\n");
+            ESP_LOGI(TAG, "es8311_dev i2c create success");
         }
+
         // i2s
-        if (i2s_keep[0]) {
-            return ;
-        }
-        i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-        i2s_std_config_t std_cfg =
-        {
-            .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
-            .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG((i2s_data_bit_width_t)16, I2S_SLOT_MODE_STEREO),
-            .gpio_cfg =
-            {
-                .mclk = I2S_MCLK_PIN,
-                .bclk = I2S_BCLK_PIN,
-                .ws = I2S_LRCK_PIN,
-                .dout = I2S_DADC_PIN,
-                .din = I2S_DDAT_PIN,
-            },
-        };
-        i2s_keep[0] = (i2s_keep_t *) calloc(1, sizeof(i2s_keep_t));
-        if (i2s_keep[0] == NULL) {
-            return;
-        }
-        i2s_tdm_slot_mask_t slot_mask = (i2s_tdm_slot_mask_t)(I2S_TDM_SLOT0 | I2S_TDM_SLOT1 | I2S_TDM_SLOT2 | I2S_TDM_SLOT3);
-        i2s_tdm_config_t tdm_cfg = 
-        {
-            .clk_cfg  = I2S_TDM_CLK_DEFAULT_CONFIG(16000),
-            .slot_cfg = I2S_TDM_PHILIPS_SLOT_DEFAULT_CONFIG((i2s_data_bit_width_t)16, I2S_SLOT_MODE_STEREO, slot_mask),
-            .gpio_cfg = {
-                .mclk = I2S_MCLK_PIN,
-                .bclk = I2S_BCLK_PIN,
-                .ws = I2S_LRCK_PIN,
-                .dout = I2S_DADC_PIN,
-                .din = I2S_DDAT_PIN,
-            },
-        };
-        tdm_cfg.slot_cfg.total_slot = 4;
-        int ret = i2s_new_channel(&chan_cfg, &i2s_keep[0]->tx_handle, &i2s_keep[0]->rx_handle);
-        if (i2s_out_mode == I2S_COMM_MODE_STD)
-        {
-            ret = i2s_channel_init_std_mode(i2s_keep[0]->tx_handle, &std_cfg);
-        }
-        else 
-        if (i2s_out_mode == I2S_COMM_MODE_TDM) 
-        {
-        ret = i2s_channel_init_tdm_mode(i2s_keep[0]->tx_handle, &tdm_cfg);
-        }
-        if (i2s_in_mode == I2S_COMM_MODE_STD)
-        {
-            ret = i2s_channel_init_std_mode(i2s_keep[0]->rx_handle, &std_cfg);
-        } 
-        else 
-        if (i2s_in_mode == I2S_COMM_MODE_TDM)
-        {
-            ret = i2s_channel_init_tdm_mode(i2s_keep[0]->rx_handle, &tdm_cfg);
-        }
-        i2s_channel_enable(i2s_keep[0]->tx_handle);
+        i2s_config_t i2s_cfg;
+        i2s_cfg.mode                 = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_RX);
+        i2s_cfg.sample_rate          = 44100;
+        i2s_cfg.bits_per_sample      = I2S_BITS_PER_SAMPLE_16BIT;
+        i2s_cfg.channel_format       = I2S_CHANNEL_FMT_RIGHT_LEFT;
+        i2s_cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
+        i2s_cfg.dma_buf_count        = 3;
+        i2s_cfg.dma_buf_len          = 300;
+        i2s_cfg.use_apll             = 1;
+        i2s_cfg.intr_alloc_flags     = ESP_INTR_FLAG_LEVEL2;
 
-        // codec
-        audio_codec_i2s_cfg_t i2s_cfg = {
-            .rx_handle = i2s_keep[0]->rx_handle,
-            .tx_handle = i2s_keep[0]->tx_handle,
-        };
-        const audio_codec_data_if_t *data_if = audio_codec_new_i2s_data(&i2s_cfg);
-
-        audio_codec_i2c_cfg_t i2c_cfg = 
-        {
-            .port = I2C_NUM_0,
-            .addr = ES8311_ADDR,
-        };
-        const audio_codec_ctrl_if_t *out_ctrl_if = audio_codec_new_i2c_ctrl(&i2c_cfg);
+        i2s_driver_install(I2S_NUM_0, &i2s_cfg, 0, NULL);
+        i2s_pin_config_t i2s_pin_cfg = {0};
+        i2s_pin_cfg.mck_io_num   = I2S_MCLK_PIN;
+        i2s_pin_cfg.bck_io_num   = I2S_BCLK_PIN;
+        i2s_pin_cfg.ws_io_num    = I2S_LRCK_PIN;
+        i2s_pin_cfg.data_out_num = I2S_DDAC_OUT_PIN;
+        i2s_pin_cfg.data_in_num  = I2S_DADC_IN_PIN;
+        i2s_set_pin(I2S_NUM_0, &i2s_pin_cfg);
+        // i2s_zero_dma_buffer(I2S_NUM_0);
+        // es8311
+        ESP_LOGI(TAG, "Start es8311 codec chip");
+        audio_hal_codec_config_t es8311_cfg;
+        es8311_cfg.adc_input = AUDIO_HAL_ADC_INPUT_LINE1;
+        es8311_cfg.dac_output = AUDIO_HAL_DAC_OUTPUT_ALL;
+        es8311_cfg.codec_mode = AUDIO_HAL_CODEC_MODE_BOTH;
+        es8311_cfg.i2s_iface.mode = AUDIO_HAL_MODE_SLAVE;
+        es8311_cfg.i2s_iface.fmt = AUDIO_HAL_I2S_NORMAL;
+        es8311_cfg.i2s_iface.samples = AUDIO_HAL_44K_SAMPLES;
+        es8311_cfg.i2s_iface.bits = AUDIO_HAL_BIT_LENGTH_16BITS;
+        printf("init es8311\n");
+        es8311_codec_init(&es8311_cfg);
+        es8311_codec_config_i2s(es8311_cfg.codec_mode, &es8311_cfg.i2s_iface);
+        es8311_codec_ctrl_state(AUDIO_HAL_CODEC_MODE_BOTH, AUDIO_HAL_CTRL_START);
+        es8311_set_mic_gain(ES8311_MIC_GAIN_0DB);
+        // 0xC0: -96 dB, 0x64: -50 dB, 0x00: 0 dB
+        es8311_codec_set_voice_volume(0xBD);
         
-        const audio_codec_gpio_if_t *gpio_if = audio_codec_new_gpio();
-        // New output codec interface
-        es8311_codec_cfg_t es8311_cfg = 
-        {
-            .ctrl_if = out_ctrl_if,
-            .gpio_if = gpio_if,
-            .codec_mode = ESP_CODEC_DEV_WORK_MODE_DAC,
-            .pa_pin = EXT_GPIO3_PIN,
-            .use_mclk = true,
-        };
-        const audio_codec_if_t *out_codec_if = es8311_codec_new(&es8311_cfg);
-        // New output codec device
-        esp_codec_dev_cfg_t dev_cfg = 
-        {
-            .dev_type = ESP_CODEC_DEV_TYPE_IN_OUT, // 设备同时支持录制和播放
-            .codec_if = out_codec_if,              // es8311_codec_new 获取到的接口实现
-            .data_if = data_if,                    // audio_codec_new_i2s_data 获取到的数据接口实现
-        };
-        codec_dev = esp_codec_dev_new(&dev_cfg);
+        es8311_read_all();
+        
+        xTaskCreate(record_and_play_task, "record_and_play_task", 1024 * 8, NULL, 5, NULL);
+
+        // vTaskDelay(100 / portTICK_PERIOD_MS);
+        // pi4io_speaker_enable();
     }
 
-    // 添加录音函数
-    static esp_err_t record_audio(uint8_t* data, size_t size) 
+    void record_and_play_task(void *arg)
     {
-        return esp_codec_dev_read(codec_dev, data, size);
-    }
-
-    // 添加播放函数
-    static esp_err_t play_audio(const uint8_t* data, size_t size) 
-    {
-        return esp_codec_dev_write(codec_dev, (void *)data, size);
+        size_t bytes_read;
+        uint8_t *record_cache = (uint8_t *)malloc(1024 * 4);    // heap_caps_malloc
+        while (1) 
+        {
+            if (play_flag == 0)
+            {
+                if (i2s_read(I2S_NUM_0, (void *)record_cache, 1024 * 4, &bytes_read, portMAX_DELAY) == ESP_OK)
+                {
+                    if(i2s_write(I2S_NUM_0, (void *)record_cache, bytes_read, &bytes_read, portMAX_DELAY) != ESP_OK)
+                    {
+                        ESP_LOGE(TAG, "i2s_write failed:bytes=%d", bytes_read);
+                    }
+                    for(int i=0; i<100; i++) 
+                    {
+                        printf("%d,", ((int16_t*)record_cache)[i]);
+                    }
+                    printf("\n");
+                }
+                else
+                {
+                    ESP_LOGE(TAG, "i2s_read failed:bytes=%d", bytes_read);
+                }
+            }
+            else
+            {
+                vTaskDelay(10 / portTICK_PERIOD_MS);
+            }
+        }
+        free(record_cache);
     }
 
 
