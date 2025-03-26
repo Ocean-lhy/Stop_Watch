@@ -41,7 +41,10 @@ extern "C"
 #include "esp_lcd_co5300.h"
 #include "esp_lcd_touch_cst9217.h"
 
-#include "ui.h"
+// #include "ui.h"
+
+#include "gui_guider.h"
+#include "custom.h"
 
 // 管脚定义
 
@@ -240,6 +243,9 @@ extern "C"
     static void example_lvgl_port_task(void *arg);
     static void lcd_init();
 
+    
+    lv_ui guider_ui;
+
     // touch
     enum work_mode{
         NOMAL_MODE = 0,
@@ -270,7 +276,7 @@ extern "C"
     static void cst9217_read_word_from_mem(uint8_t type, uint16_t addr, uint32_t *value);
     static void cst9217_read_data(uint8_t *data, uint16_t len);
     static void cst9217_set_workmode(enum work_mode mode, uint8_t enable);
-    static void cst9217_update();
+    static int cst9217_update();
 
     // sleep mode test
     static void c6_enter_light_sleep_mode();
@@ -292,6 +298,9 @@ extern "C"
         // gpio_hold_dis((gpio_num_t)CONFIG_NSS_GPIO);
 
         print_chip_info();
+
+        touch_mux = xSemaphoreCreateBinary();
+        assert(touch_mux);
 
         c6_global_irq_init();
         
@@ -398,21 +407,6 @@ extern "C"
                 btn2 = 0;
             }
 
-            if (touch_irq_flag)
-            {
-                BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-                
-                // 处理触摸数据
-                cst9217_update();
-                
-                // 处理完成后重新启用中断
-                touch_irq_flag = false;
-                gpio_intr_enable(TP_INT_IRQ_PIN);
-                
-                // 可选：如果使用FreeRTOS API需要从ISR调用
-                portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-            }
-
             vTaskDelay(10 / portTICK_PERIOD_MS);
         }
     }
@@ -471,6 +465,12 @@ extern "C"
         if ((uint32_t)arg == TP_INT_IRQ_PIN)
         {
             touch_irq_flag = true;
+            // BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            // xSemaphoreGiveFromISR(touch_mux, &xHigherPriorityTaskWoken);
+
+            // if (xHigherPriorityTaskWoken) {
+            //     portYIELD_FROM_ISR();
+            // }
         }
         else 
         if ((uint32_t)arg == USER_BUTTON1_PIN)
@@ -482,10 +482,6 @@ extern "C"
         {
             btn2 = 1;
         }
-        // else if ((uint32_t)arg == IMU_IRQ_PIN)
-        // {
-        //     c6_lora_irq_flag = true;
-        // }
     }
     
     /******************************************************************************/
@@ -1095,34 +1091,42 @@ extern "C"
         cst9217_read_tpinfo();
     }
 
-    static void cst9217_update()
+    static int cst9217_update()
     {
         uint8_t i2c_buf[MAX_POINTS_REPORT*5+5] = {0};
         uint8_t finger_num = 0;
 
         // 读取触摸数据
         if (i2c_bus_read_reg(cst9217_dev, 0xD000, 2, i2c_buf, sizeof(i2c_buf)) != ESP_OK) {
-            printf("Failed to read touch data\n");
-            return;
+            // printf("Failed to read touch data\n");
+            return 0;
         }
+
+        // i2c_bus_write_reg(cst9217_dev, 0xD000AB, 3, i2c_buf, 0);
 
         // 验证数据有效性
         if (i2c_buf[6] != 0xAB) {
-            printf("Invalid touch data header\n");
-            return;
+            // printf("Invalid touch data header\n");
+            return 0;
         }
 
         finger_num = i2c_buf[5] & 0x7F;
         if (finger_num > MAX_POINTS_REPORT) {
-            printf("Exceed max finger count: %d\n", finger_num);
-            return;
+            // printf("Exceed max finger count: %d\n", finger_num);
+            return 0;
         }
 
-        printf("Detected fingers: %d\n", finger_num);
+        // printf("Detected fingers: %d\n", finger_num);
 
         // 清空之前的触摸数据
         memset(tp_info, 0, sizeof(tp_info));
 
+        // printf("i2c_buf:");
+        // for(int i=0; i<sizeof(i2c_buf); i++)
+        // {
+        //     printf("%02x ", i2c_buf[i]);
+        // }
+        // printf("\n");
         // 解析每个触摸点
         for (int i = 0; i < finger_num; i++) {
             uint8_t *data = (i == 0) ? i2c_buf : i2c_buf + 5*i + 2;
@@ -1138,15 +1142,11 @@ extern "C"
             tp_info[i].y = ((uint16_t)(data[2]) << 4) | (data[3] & 0x0F);
             tp_info[i].z = (data[3] & 0x1F) + 0x03;
 
-            printf("Finger %d: ID=%d X=%d Y=%d Z=%d\n", 
-                  i+1, tp_info[i].id, tp_info[i].x, tp_info[i].y, tp_info[i].z);
+            // printf("Finger %d: ID=%d X=%d Y=%d Z=%d switch=%d\n", 
+            //       i+1, tp_info[i].id, tp_info[i].x, tp_info[i].y, tp_info[i].z, tp_info[i].switch_);
         }
 
-        // 发送触摸事件到LVGL
-        // if (xSemaphoreTake(touch_mux, pdMS_TO_TICKS(100)) == pdTRUE) {
-        //     esp_lcd_touch_read_data(tp);
-        //     xSemaphoreGive(touch_mux);
-        // }
+        return finger_num;
     }
 
     static void cst9217_enter_bootloader()
@@ -1428,26 +1428,29 @@ extern "C"
 
     static void example_lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
     {
-        esp_lcd_touch_handle_t tp = (esp_lcd_touch_handle_t)drv->user_data;
-        assert(tp);
+        // esp_lcd_touch_handle_t tp = (esp_lcd_touch_handle_t)drv->user_data;
+        // assert(tp);
 
-        uint16_t tp_x;
-        uint16_t tp_y;
-        uint8_t tp_cnt = 0;
+        // uint16_t tp_x;
+        // uint16_t tp_y;
+        // uint8_t tp_cnt = 0;
+        // bool tp_pressed = false;
         /* 将触摸控制器中的数据读取到内存中 */
-        if (xSemaphoreTake(touch_mux, 0) == pdTRUE) {
-            esp_lcd_touch_read_data(tp);
-        }
+        // if (touch_irq_flag) 
+        // {
+            // esp_lcd_touch_read_data(tp);
+            // cst9217_update();
+            // tp_pressed = tp_info[0].z >= 1 ? true : false;
+        //     touch_irq_flag = 0;
+        // }
 
         /* 从触摸控制器读取数据 */
-        bool tp_pressed = esp_lcd_touch_get_coordinates(tp, &tp_x, &tp_y, NULL, &tp_cnt, 1);
-        if (tp_pressed && tp_cnt > 0) {
-            data->point.x = tp_x;
-            data->point.y = tp_y;
-            data->state = LV_INDEV_STATE_PRESSED;
-            ESP_LOGD(TAG, "Touch position: %d,%d", tp_x, tp_y);
-        } else {
-            data->state = LV_INDEV_STATE_RELEASED;
+        if (cst9217_update() > 0) 
+        {
+            data->point.x = EXAMPLE_LCD_H_RES - tp_info[0].x;
+            data->point.y = EXAMPLE_LCD_V_RES - tp_info[0].y;
+            data->state = tp_info[0].switch_ != 0x00 ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+            // ESP_LOGI(TAG, "Touch position: %d,%d", data->point.x, data->point.y);
         }
     }
 
@@ -1501,10 +1504,10 @@ extern "C"
         ESP_ERROR_CHECK(esp_lcd_new_panel_co5300(io_handle, &panel_config, &panel_handle));
         // ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
         ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
-        ESP_ERROR_CHECK(esp_lcd_panel_set_gap(panel_handle, 16, 0));
+        ESP_ERROR_CHECK(esp_lcd_panel_set_gap(panel_handle, 6, 0));
         ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
-        // ESP_LOGI(TAG, "Install CST9217 touch driver");
+        ESP_LOGI(TAG, "Install CST9217 touch driver");
         // esp_lcd_panel_io_handle_t tp_io_handle = NULL;
         // const esp_lcd_panel_io_i2c_config_t tp_io_config = {
         //     .dev_addr = CST9217_ADDR,
@@ -1520,8 +1523,7 @@ extern "C"
 
         // ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(TOUCH_HOST, &tp_io_config, &tp_io_handle));
 
-        // touch_mux = xSemaphoreCreateBinary();
-        // assert(touch_mux);
+        
 
         // const esp_lcd_touch_config_t tp_cfg = {
         //     .x_max = EXAMPLE_LCD_H_RES,
@@ -1577,14 +1579,14 @@ extern "C"
         ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
         ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, EXAMPLE_LVGL_TICK_PERIOD_MS * 1000));
 
-        // static lv_indev_drv_t indev_drv;    // 输入设备驱动程序（触摸）
-        // lv_indev_drv_init(&indev_drv);
-        // indev_drv.type = LV_INDEV_TYPE_POINTER;
+        static lv_indev_drv_t indev_drv;    // 输入设备驱动程序（触摸）
+        lv_indev_drv_init(&indev_drv);
+        indev_drv.type = LV_INDEV_TYPE_POINTER;
         // indev_drv.disp = disp;
-        // indev_drv.read_cb = example_lvgl_touch_cb;
+        indev_drv.read_cb = example_lvgl_touch_cb;
         // indev_drv.user_data = tp;
         
-        // lv_indev_drv_register(&indev_drv);
+        lv_indev_drv_register(&indev_drv);
 
         lvgl_mux = xSemaphoreCreateMutex();
         assert(lvgl_mux);
@@ -1596,7 +1598,8 @@ extern "C"
             // lv_demo_music();        /* 类似智能手机的现代音乐播放器演示 */
             // lv_demo_stress();       /* LVGL 压力测试 */
             // lv_demo_benchmark();    /* 用于测量 LVGL 性能或比较不同设置的演示 */
-            ui_init();
+            // ui_init();
+            setup_ui(&guider_ui);
             // 释放互斥锁
             example_lvgl_unlock();
         }
