@@ -1086,7 +1086,7 @@ extern "C"
         {
             printf("cst9217_dev create success\n");
         }
-        cst9217_read_chip_id();
+        // cst9217_read_chip_id();
 
         cst9217_read_tpinfo();
     }
@@ -1160,18 +1160,20 @@ extern "C"
                 return;
             }
             pi4io_tp_reset();
-            vTaskDelay(i / portTICK_PERIOD_MS);
-            i2c_bus_write_reg(cst9217_dev, 0xA001AA, 3, i2c_buf, 0);
-            vTaskDelay(1 / portTICK_PERIOD_MS);
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            i2c_buf[0] = 0xAA;
+            i2c_bus_write_reg(cst9217_dev, 0xA001, 2, i2c_buf, 1);
+            vTaskDelay(5 / portTICK_PERIOD_MS);
             i2c_bus_read_reg(cst9217_dev, 0xA002, 2, i2c_buf, 2);
-            vTaskDelay(1 / portTICK_PERIOD_MS);
+            vTaskDelay(5 / portTICK_PERIOD_MS);
             if(i2c_buf[0] == 0x55 && i2c_buf[1] == 0xB0)
             {
                 printf("cst9217_enter_bootloader success\n");
                 break;
             }
         }
-        i2c_bus_write_reg(cst9217_dev, 0xA00100, 3, i2c_buf, 0);
+        i2c_buf[0] = 0x00;
+        i2c_bus_write_reg(cst9217_dev, 0xA001, 2, i2c_buf, 1);
     }
 
     static void cst9217_read_chip_id()
@@ -1200,7 +1202,7 @@ extern "C"
         {
             printf("partno_chip_type error 0x%lx\n", partno_chip_type);
         }
-        vTaskDelay(50 / portTICK_PERIOD_MS);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
     
     static void cst9217_read_tpinfo()
@@ -1434,22 +1436,23 @@ extern "C"
         // uint16_t tp_x;
         // uint16_t tp_y;
         // uint8_t tp_cnt = 0;
-        // bool tp_pressed = false;
+        bool tp_pressed = false;
         /* 将触摸控制器中的数据读取到内存中 */
-        // if (touch_irq_flag) 
-        // {
+        if (touch_irq_flag) 
+        {
             // esp_lcd_touch_read_data(tp);
-            // cst9217_update();
-            // tp_pressed = tp_info[0].z >= 1 ? true : false;
-        //     touch_irq_flag = 0;
-        // }
+            cst9217_update();
+            tp_pressed = tp_info[0].switch_ != 0x00 ? true : false;
+            touch_irq_flag = 0;
+        }
 
         /* 从触摸控制器读取数据 */
-        if (cst9217_update() > 0) 
+        // if (cst9217_update() > 0 && ) 
+        if (tp_pressed)
         {
             data->point.x = EXAMPLE_LCD_H_RES - tp_info[0].x;
             data->point.y = EXAMPLE_LCD_V_RES - tp_info[0].y;
-            data->state = tp_info[0].switch_ != 0x00 ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+            data->state = LV_INDEV_STATE_PRESSED;
             // ESP_LOGI(TAG, "Touch position: %d,%d", data->point.x, data->point.y);
         }
     }
