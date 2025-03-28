@@ -291,6 +291,10 @@ extern "C"
 
     void app_main(void)
     {
+        size_t psram_size = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+        size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        printf("PSRAM size: %d bytes, free: %d bytes\n", psram_size, psram_free);
+
         nvs_init();
         vTaskDelay(3000 / portTICK_PERIOD_MS);
         printf("app main start\r\n");
@@ -1356,28 +1360,28 @@ extern "C"
     static void example_lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
     {
         esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t) drv->user_data;
-        const int offsetx1 = area->x1;
-        const int offsetx2 = area->x2;
-        const int offsety1 = area->y1;
-        const int offsety2 = area->y2;
+        // const int offsetx1 = area->x1;
+        // const int offsetx2 = area->x2;
+        // const int offsety1 = area->y1;
+        // const int offsety2 = area->y2;
 
         // 将缓冲区的内容复制到显示的特定区域
-        esp_lcd_panel_draw_bitmap(panel_handle, offsetx1, offsety1, offsetx2 + 1, offsety2 + 1, color_map);
+        esp_lcd_panel_draw_bitmap(panel_handle, area->x1, area->y1, area->x2 + 1, area->y2 + 1, color_map);
     }
 
     static void example_lvgl_rounder_cb(struct _lv_disp_drv_t *disp_drv, lv_area_t *area)
     {
-        uint16_t x1 = area->x1;
-        uint16_t x2 = area->x2;
-        uint16_t y1 = area->y1;
-        uint16_t y2 = area->y2;
+        // uint16_t x1 = area->x1;
+        // uint16_t x2 = area->x2;
+        // uint16_t y1 = area->y1;
+        // uint16_t y2 = area->y2;
 
         // round the start of coordinate down to the nearest 2M number
-        area->x1 = (x1 >> 1) << 1;
-        area->y1 = (y1 >> 1) << 1;
+        area->x1 = (area->x1 >> 1) << 1;
+        area->y1 = (area->y1 >> 1) << 1;
         // round the end of coordinate up to the nearest 2N+1 number
-        area->x2 = ((x2 >> 1) << 1) + 1;
-        area->y2 = ((y2 >> 1) << 1) + 1;
+        area->x2 = ((area->x2 >> 1) << 1) + 1;
+        area->y2 = ((area->y2 >> 1) << 1) + 1;
         return;
     }
 
@@ -1553,13 +1557,16 @@ extern "C"
 
         ESP_LOGI(TAG, "Initialize LVGL library");
         lv_init();
+        size_t psram_size = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+        size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        printf("PSRAM size: %d bytes, free: %d bytes\n", psram_size, psram_free);
         // 分配 LVGL 使用的绘制缓冲区, 建议选择绘制缓冲区的大小至少为屏幕大小的 1/10
-        lv_color_t *buf1 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * 50 * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+        lv_color_t *buf1 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * 50, MALLOC_CAP_SPIRAM);
         assert(buf1);
-        lv_color_t *buf2 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * 50 * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+        lv_color_t *buf2 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * 50, MALLOC_CAP_SPIRAM);
         assert(buf2);
         // 初始化 LVGL 绘制缓冲区
-        lv_disp_draw_buf_init(&disp_buf, buf1, buf2, EXAMPLE_LCD_H_RES * 50 * sizeof(lv_color_t));
+        lv_disp_draw_buf_init(&disp_buf, buf1, buf2, EXAMPLE_LCD_H_RES * 50);
 
         ESP_LOGI(TAG, "Register display driver to LVGL");
         lv_disp_drv_init(&disp_drv);
