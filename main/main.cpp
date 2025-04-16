@@ -23,7 +23,6 @@ extern "C"
 
 #include "i2c_bus.h"
 #include "bmi270.h"
-#include "ir_nec_encoder.h"
 
 #include "driver/i2s.h"
 #include "es8311.h"
