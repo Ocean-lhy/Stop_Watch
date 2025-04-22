@@ -10,6 +10,8 @@ file(GLOB UI_SRCS
     UI/generated/images/*.c
 )
 
+file(GLOB USER_DRIVER_SRCS user_driver/*.c)
+
 set(include_dirs 
     UI/custom 
     UI/generated 
@@ -21,7 +23,28 @@ set(include_dirs
 file(GLOB AUDIO_SRCS es8311/*.c)
 
 idf_component_register(
-                    SRCS "main.cpp" "i2c_bus.c" ${BMI_SRCS} ${UI_SRCS} ${AUDIO_SRCS}
-                    INCLUDE_DIRS ${include_dirs} "."  "BMI270-Sensor-API" "UI" "es8311"
-                    REQUIRES driver nvs_flash esp_codec_dev spi_flash esp_lcd_touch esp_lcd_co5300 esp_lcd_touch_cst9217
-                    EMBED_TXTFILES "test.pcm")
+    SRCS 
+        "main.cpp"
+        "i2c_bus.c"
+        ${USER_DRIVER_SRCS}
+        ${BMI_SRCS}
+        ${UI_SRCS}
+        ${AUDIO_SRCS}
+    INCLUDE_DIRS 
+        "."
+        ${include_dirs}
+        "BMI270-Sensor-API"
+        "UI"
+        "es8311"
+        "user_driver"
+    REQUIRES 
+        driver 
+        nvs_flash 
+        esp_codec_dev 
+        spi_flash 
+        esp_lcd_touch 
+        esp_lcd_co5300 
+        esp_lcd_touch_cst9217
+    # EMBED_TXTFILES "test.pcm"
+)
+
