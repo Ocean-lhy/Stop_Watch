@@ -11,6 +11,7 @@ extern "C"
 #include "driver/i2c.h"
 #include "esp_timer.h"
 #include "i2c_bus.h"
+#include "esp_sleep.h"
 
 // 导入模块化的驱动
 #include "system_utils.h"
@@ -38,6 +39,8 @@ lv_ui guider_ui;
 i2c_bus_handle_t i2c_bus = NULL;
 static uint64_t last_blink_time = 0;
 static bool led_blink = false;
+
+void sleep_mode(uint8_t sleep_mode);
 
 void app_main(void)
 {
@@ -83,32 +86,42 @@ void app_main(void)
     }
     
     // RX8130
+    ESP_LOGI(TAG, "RX8130 init");
     rx8130_init(i2c_bus);
 
     // 初始化各个驱动
+    ESP_LOGI(TAG, "motor_init");
     motor_init();
+    ESP_LOGI(TAG, "pi4io_init");
     pi4io_init(i2c_bus);
+    pi4io_5V_out_disable();
     
     // 充电管理
+    ESP_LOGI(TAG, "aw32001_init");
     aw32001_init(i2c_bus);
     aw32001_charge_set(true);
 
     // 电量计
+    ESP_LOGI(TAG, "bq27220_init");
     bq27220_init(i2c_bus);
     bq27220_exit_sealed();
     bq27220_full_access();
     bq27220_enter_cfg_update();
 
     // IMU
+    ESP_LOGI(TAG, "bmi270_dev_init");
     bmi270_dev_init(i2c_bus);
 
     // ES8311 音频
+    ESP_LOGI(TAG, "es8311_driver_init");
     es8311_driver_init(i2c_bus);
 
     // 触摸
+    ESP_LOGI(TAG, "cst9217_init");
     cst9217_init(i2c_bus);
 
     // LCD
+    ESP_LOGI(TAG, "lcd_init");
     lcd_init();
 
     // bool timer_triggered = false;
@@ -123,7 +136,27 @@ void app_main(void)
     //     rx8130_set_shutdown_timer_mode(30);
     //     power_off();
     // }
-    rx8130_enable_timer(false);
+    // rx8130_enable_timer(true);
+
+    // sleep_mode(2);
+
+    // 设置G3-G8 G11为输出
+    gpio_config_t io_conf = {};
+    io_conf.intr_type = GPIO_INTR_DISABLE;    // 禁用中断
+    io_conf.mode = GPIO_MODE_OUTPUT;           // 设置为输出模式
+    io_conf.pin_bit_mask = ((1ULL<<3) | (1ULL<<4) | (1ULL<<5) | (1ULL<<6) | (1ULL<<7) | (1ULL<<8) | (1ULL<<11)); // G3-G7
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    gpio_config(&io_conf);
+
+    // 设置输出
+    gpio_set_level(GPIO_NUM_3, 0);
+    gpio_set_level(GPIO_NUM_4, 0); 
+    gpio_set_level(GPIO_NUM_5, 0);
+    gpio_set_level(GPIO_NUM_6, 0);
+    gpio_set_level(GPIO_NUM_7, 0);
+    gpio_set_level(GPIO_NUM_8, 0);
+    gpio_set_level(GPIO_NUM_11, 0);
     
     uint8_t brightness = 0xFF;
     ESP_LOGI(TAG, "Start main loop");
@@ -156,7 +189,8 @@ void app_main(void)
             btn1 = 0;
             brightness += 10;
             lcd_set_brightness(brightness);
-            power_off();
+            lcd_set_sleep(play_flag);
+            // power_off();
         } 
         if (btn2)
         {
@@ -174,6 +208,36 @@ void app_main(void)
         }
 
         vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
+void sleep_mode(uint8_t sleep_mode) // 0: wake up, 1: light sleep, 2: deep sleep
+{
+    pi4io_sleep(sleep_mode);
+    if (sleep_mode == 0)
+    {
+        lcd_set_sleep(false);
+        cst9217_set_workmode(LP_MODE, 1);
+    }
+    else 
+    if (sleep_mode == 1)
+    {
+        bq27220_enter_sleep_mode();
+        bmi270_dev_sleep();
+        lcd_set_sleep(true);
+        cst9217_set_workmode(NOMAL_MODE, 1);
+        esp_light_sleep_start();
+    }
+    else 
+    if (sleep_mode == 2)
+    {
+        bq27220_enter_sleep_mode();
+        bmi270_dev_sleep();
+        esp_deep_sleep_start();
+    }
+    while (1)
+    {
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }
 

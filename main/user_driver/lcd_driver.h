@@ -40,7 +40,7 @@
 #define EXAMPLE_LVGL_TICK_PERIOD_MS    1
 #define EXAMPLE_LVGL_TASK_MAX_DELAY_MS 500
 #define EXAMPLE_LVGL_TASK_MIN_DELAY_MS 1
-#define EXAMPLE_LVGL_TASK_STACK_SIZE   (4 * 1024)
+#define EXAMPLE_LVGL_TASK_STACK_SIZE   (32 * 1024)
 #define EXAMPLE_LVGL_TASK_PRIORITY     2
 
 // 外部变量声明
@@ -82,5 +82,8 @@ void example_lvgl_port_task(void *arg);
 
 // 设置亮度
 void lcd_set_brightness(uint8_t brightness);
+
+// 设置休眠
+void lcd_set_sleep(bool sleep);
 
 #endif // LCD_DRIVER_H 

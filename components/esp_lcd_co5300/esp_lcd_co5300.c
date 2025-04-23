@@ -29,7 +29,7 @@ static esp_err_t panel_co5300_mirror(esp_lcd_panel_t *panel, bool mirror_x, bool
 static esp_err_t panel_co5300_swap_xy(esp_lcd_panel_t *panel, bool swap_axes);
 static esp_err_t panel_co5300_set_gap(esp_lcd_panel_t *panel, int x_gap, int y_gap);
 static esp_err_t panel_co5300_disp_on_off(esp_lcd_panel_t *panel, bool off);
-
+static esp_err_t panel_co5300_disp_sleep(esp_lcd_panel_t *panel, bool sleep);
 typedef struct {
     esp_lcd_panel_t base;
     esp_lcd_panel_io_handle_t io;
@@ -109,6 +109,7 @@ esp_err_t esp_lcd_new_panel_co5300(const esp_lcd_panel_io_handle_t io, const esp
     co5300->base.mirror = panel_co5300_mirror;
     co5300->base.swap_xy = panel_co5300_swap_xy;
     co5300->base.disp_on_off = panel_co5300_disp_on_off;
+    co5300->base.disp_sleep = panel_co5300_disp_sleep;
     *ret_panel = &(co5300->base);
     ESP_LOGD(TAG, "new co5300 panel @%p", co5300);
 
@@ -363,6 +364,21 @@ static esp_err_t panel_co5300_disp_on_off(esp_lcd_panel_t *panel, bool on_off)
         command = LCD_CMD_DISPON;
     } else {
         command = LCD_CMD_DISPOFF;
+    }
+    ESP_RETURN_ON_ERROR(tx_param(co5300, io, command, NULL, 0), TAG, "send command failed");
+    return ESP_OK;
+}
+
+static esp_err_t panel_co5300_disp_sleep(esp_lcd_panel_t *panel, bool sleep)
+{
+    co5300_panel_t *co5300 = __containerof(panel, co5300_panel_t, base);
+    esp_lcd_panel_io_handle_t io = co5300->io;
+    int command = 0;
+
+    if (sleep) {
+        command = LCD_CMD_SLPIN;
+    } else {
+        command = LCD_CMD_SLPOUT;
     }
     ESP_RETURN_ON_ERROR(tx_param(co5300, io, command, NULL, 0), TAG, "send command failed");
     return ESP_OK;

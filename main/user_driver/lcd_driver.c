@@ -15,7 +15,7 @@ SemaphoreHandle_t lvgl_mux = NULL;
 static esp_lcd_panel_handle_t panel_handle = NULL;
 static esp_lcd_touch_handle_t tp = NULL;
 static esp_lcd_panel_io_handle_t io_handle = NULL;
-// extern lv_ui guider_ui;
+extern lv_ui guider_ui;
 
 bool example_notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
 {
@@ -143,14 +143,13 @@ void example_lvgl_port_task(void *arg)
 {
     ESP_LOGI(TAG, "Starting LVGL task");
     uint32_t task_delay_ms = EXAMPLE_LVGL_TASK_MAX_DELAY_MS;
-    ESP_LOGI(TAG, "Display LVGL demos");
     if (example_lvgl_lock(-1)) {
+        ESP_LOGI(TAG, "Display LVGL demos");
         // lv_demo_widgets();      /* 小部件示例 */
         // lv_demo_music();        /* 类似智能手机的现代音乐播放器演示 */
         // lv_demo_stress();       /* LVGL 压力测试 */
         // lv_demo_benchmark();    /* 用于测量 LVGL 性能或比较不同设置的演示 */
-        // ui_init();
-        // setup_ui(&guider_ui);
+        setup_ui(&guider_ui);
         // 释放互斥锁
         example_lvgl_unlock();
     }
@@ -252,22 +251,35 @@ void lcd_init()
     assert(lvgl_mux);
     xTaskCreate(example_lvgl_port_task, "LVGL", EXAMPLE_LVGL_TASK_STACK_SIZE, NULL, EXAMPLE_LVGL_TASK_PRIORITY, NULL);
 
-    
 }
 
 void lcd_set_brightness(uint8_t brightness)
 {
-    if (io_handle == NULL)
-    {
-        ESP_LOGE(TAG, "LCD driver not initialized");
-        return;
-    }
-    int lcd_cmd = LCD_CMD_WRDISBV & 0xFF;
-    lcd_cmd <<= 8;
-    lcd_cmd |= 0x02ULL << 24;
-    ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io_handle, lcd_cmd, &brightness, 1));
-    ESP_LOGI(TAG, "Set brightness to %d", brightness);
+    if (example_lvgl_lock(-1)) {
+        ESP_LOGI(TAG, "Set brightness to %d", brightness);
+        if (io_handle == NULL)
+        {
+            ESP_LOGE(TAG, "LCD driver not initialized");
+            example_lvgl_unlock();
+            return;
+        }
+        int lcd_cmd = LCD_CMD_WRDISBV & 0xFF;
+        lcd_cmd <<= 8;
+        lcd_cmd |= 0x02ULL << 24;
+        ESP_ERROR_CHECK(esp_lcd_panel_io_tx_param(io_handle, lcd_cmd, &brightness, 1));
+        ESP_LOGI(TAG, "Set brightness to %d", brightness);
 
-    esp_lcd_panel_io_rx_param(io_handle, LCD_CMD_RDDISBV, &brightness, 1);
-    ESP_LOGI(TAG, "Get brightness: %d", brightness);
+        esp_lcd_panel_io_rx_param(io_handle, LCD_CMD_RDDISBV, &brightness, 1);
+        ESP_LOGI(TAG, "Get brightness: %d", brightness);
+        example_lvgl_unlock();
+    }
+}
+
+void lcd_set_sleep(bool sleep)
+{
+    if (example_lvgl_lock(-1)) {
+        ESP_LOGI(TAG, "Set sleep to %d", sleep);
+        ESP_ERROR_CHECK(esp_lcd_panel_disp_sleep(panel_handle, sleep));
+        example_lvgl_unlock();
+    }
 }

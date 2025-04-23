@@ -31,4 +31,10 @@ void bmi2_delay_us(uint32_t period, void *intf_ptr);
 // 使能BMI270唤醒功能
 void bmi270_wakeup_enable(uint8_t enable);
 
+// 进入睡眠模式
+void bmi270_dev_sleep();
+
+// 唤醒BMI270
+void bmi270_dev_wakeup();
+
 #endif // BMI270_DRIVER_H 

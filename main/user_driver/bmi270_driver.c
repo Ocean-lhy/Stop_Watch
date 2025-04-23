@@ -154,3 +154,33 @@ void bmi270_dev_update()
     bmi2_get_int_status(&int_status, &aux_bmi2_dev);
     ESP_LOGI(TAG, "Int status: %d", int_status);
 }
+
+void bmi270_dev_sleep()
+{
+    uint8_t data = 0x04;
+    bmi2_i2c_write(0x7D, &data, 1, &aux_bmi2_dev);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    data = 0x17;
+    bmi2_i2c_write(0x40, &data, 1, &aux_bmi2_dev);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    data = 0x03;
+    bmi2_i2c_write(0x7C, &data, 1, &aux_bmi2_dev);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+}
+
+void bmi270_dev_wakeup()
+{
+    uint8_t data = 0x0E;
+    bmi2_i2c_write(0x7D, &data, 1, &aux_bmi2_dev);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    data = 0xA8;
+    bmi2_i2c_write(0x40, &data, 1, &aux_bmi2_dev);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    data = 0xA9;
+    bmi2_i2c_write(0x42, &data, 1, &aux_bmi2_dev);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    data = 0x02;
+    bmi2_i2c_write(0x7C, &data, 1, &aux_bmi2_dev);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    bmi270_sensor_enable(sensor_list, 3, &aux_bmi2_dev);
+}

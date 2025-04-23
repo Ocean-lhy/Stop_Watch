@@ -46,4 +46,7 @@ void pi4io_5V_out_enable();
 // 禁用5V输出
 void pi4io_5V_out_disable();
 
+// 设置睡眠模式
+void pi4io_sleep(uint8_t sleep);
+
 #endif // PI4IO_DRIVER_H 
