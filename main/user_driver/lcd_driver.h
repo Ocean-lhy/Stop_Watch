@@ -41,7 +41,7 @@
 #define EXAMPLE_LVGL_TASK_MAX_DELAY_MS 500
 #define EXAMPLE_LVGL_TASK_MIN_DELAY_MS 1
 #define EXAMPLE_LVGL_TASK_STACK_SIZE   (32 * 1024)
-#define EXAMPLE_LVGL_TASK_PRIORITY     2
+#define EXAMPLE_LVGL_TASK_PRIORITY     (configMAX_PRIORITIES - 1)
 
 // 外部变量声明
 extern SemaphoreHandle_t lvgl_mux;

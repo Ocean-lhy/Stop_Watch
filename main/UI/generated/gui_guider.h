@@ -20,10 +20,19 @@ extern "C" {
 typedef struct
 {
   
-	lv_obj_t *screen;
-	bool screen_del;
-	lv_obj_t *screen_analog_clock_1;
-	lv_obj_t *screen_canvas_1;
+	lv_obj_t *screen_clock;
+	bool screen_clock_del;
+	lv_obj_t *screen_clock_img_logo;
+	lv_obj_t *screen_clock_digital_clock_s;
+	lv_obj_t *screen_clock_datetext_date;
+	lv_obj_t *screen_clock_analog_clock_time;
+	lv_obj_t *screen_clock_canvas_dot;
+	lv_obj_t *screen_ccw;
+	bool screen_ccw_del;
+	lv_obj_t *screen_ccw_digital_clock_s;
+	lv_obj_t *screen_ccw_label_ms;
+	lv_obj_t *screen_ccw_analog_clock_ccw;
+	lv_obj_t *screen_ccw_img_1;
 }lv_ui;
 
 typedef void (*ui_setup_scr_t)(lv_ui * ui);
@@ -47,13 +56,20 @@ void init_keyboard(lv_ui *ui);
 extern lv_ui guider_ui;
 
 
-void setup_scr_screen(lv_ui *ui);
+void setup_scr_screen_clock(lv_ui *ui);
+void setup_scr_screen_ccw(lv_ui *ui);
+LV_IMG_DECLARE(_m5logo2022_alpha_90x72);
 LV_IMG_DECLARE(_hour_needle_alpha_80x10);
 LV_IMG_DECLARE(_min_needle_alpha_150x7);
-LV_IMG_DECLARE(_second_needle_alpha_185x15);
+LV_IMG_DECLARE(_second_needle_alpha_185x18);
+LV_IMG_DECLARE(_second_needle_alpha_140x15);
+LV_IMG_DECLARE(_min_needle_alpha_200x6);
 
-LV_FONT_DECLARE(lv_font_Acme_Regular_28)
+LV_FONT_DECLARE(lv_font_montserratMedium_20)
 LV_FONT_DECLARE(lv_font_montserratMedium_16)
+LV_FONT_DECLARE(lv_font_montserratMedium_18)
+LV_FONT_DECLARE(lv_font_Acme_Regular_28)
+LV_FONT_DECLARE(lv_font_montserratMedium_26)
 
 
 #ifdef __cplusplus

@@ -24,11 +24,15 @@ extern "C"
 #include "cst9217_driver.h"
 #include "lcd_driver.h"
 #include "rx8130ce.h"
+#include "time_utils.h"
 
 #include "gui_guider.h"
 #include "custom.h"
 
 #define TAG "main"
+
+#define WIFI_SSID "ocean"
+#define WIFI_PASSWORD "oceanocean"
 
 // extern const uint8_t test_pcm_start[] asm("_binary_test_pcm_start");
 // extern const uint8_t test_pcm_end[]   asm("_binary_test_pcm_end");
@@ -40,7 +44,98 @@ i2c_bus_handle_t i2c_bus = NULL;
 static uint64_t last_blink_time = 0;
 static bool led_blink = false;
 
+uint16_t screen_clock_s_year = 2025;
+uint8_t screen_clock_s_month = 1;
+uint8_t screen_clock_s_day = 1;
+
+extern int screen_ccw_digital_clock_s_min_value;
+extern int screen_ccw_digital_clock_s_hour_value;
+extern int screen_ccw_digital_clock_s_sec_value;
+extern int screen_ccw_digital_clock_s_ms_value;
+
+extern int screen_clock_digital_clock_s_min_value;
+extern int screen_clock_digital_clock_s_hour_value;
+extern int screen_clock_digital_clock_s_sec_value;
+extern char screen_clock_digital_clock_s_meridiem[];
+
+uint8_t ccw_clock_state = 0;    // 0: stop, 1: running 2: reset and stop
+
 void sleep_mode(uint8_t sleep_mode);
+
+// 时间同步任务函数
+void time_sync_task()
+{
+    // 初始化时间模块
+    time_utils_init();
+    
+    // 连接WiFi
+    esp_err_t ret = time_utils_connect_wifi(WIFI_SSID, WIFI_PASSWORD);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "连接WiFi失败，无法同步时间");
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // 同步网络时间
+    ret = time_utils_sync_ntp();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "同步网络时间失败");
+        time_utils_disconnect_wifi();
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // 校准RTC时间
+    ret = time_utils_calibrate_rtc();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "校准RTC时间失败");
+    }
+    
+    // 断开WiFi
+    time_utils_disconnect_wifi();
+    
+    // 获取当前时间并打印
+    rx8130_datetime_t current_time;
+    if (time_utils_get_time(&current_time) == ESP_OK) {
+        ESP_LOGI(TAG, "当前RTC时间: %02d/%02d/%02d %02d:%02d:%02d 星期%d",
+                 current_time.year, current_time.month, current_time.date,
+                 current_time.hour, current_time.minute, current_time.second,
+                 current_time.day);
+    }
+    
+    // 任务完成，删除自身
+    // vTaskDelete(NULL);
+}
+
+void update_time(void *pvParameters)
+{
+    time_utils_time_t current_time_ms;
+    while (1)
+    {
+        if (time_utils_get_time_ms(&current_time_ms) == ESP_OK)
+        {
+            // screen_ccw_digital_clock_s_hour_value = current_time_ms.datetime.hour;
+            // screen_ccw_digital_clock_s_min_value = current_time_ms.datetime.minute;
+            // screen_ccw_digital_clock_s_sec_value = current_time_ms.datetime.second;
+            // screen_ccw_digital_clock_s_ms_value = current_time_ms.milliseconds;
+            screen_clock_digital_clock_s_hour_value = current_time_ms.datetime.hour;
+            screen_clock_digital_clock_s_min_value = current_time_ms.datetime.minute;
+            screen_clock_digital_clock_s_sec_value = current_time_ms.datetime.second;
+            screen_clock_s_year = current_time_ms.datetime.year + 2000;
+            screen_clock_s_month = current_time_ms.datetime.month;
+            screen_clock_s_day = current_time_ms.datetime.date;
+            if (current_time_ms.datetime.hour < 12)
+            {
+                strcpy(screen_clock_digital_clock_s_meridiem, "AM");
+            }
+            else
+            {
+                strcpy(screen_clock_digital_clock_s_meridiem, "PM");
+            }
+        }
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+}
 
 void app_main(void)
 {
@@ -120,6 +215,11 @@ void app_main(void)
     ESP_LOGI(TAG, "cst9217_init");
     cst9217_init(i2c_bus);
 
+
+    // 创建时间同步任务
+    time_sync_task();
+    xTaskCreate(update_time, "update_time", 4096, NULL, 5, NULL);
+    
     // LCD
     ESP_LOGI(TAG, "lcd_init");
     lcd_init();
@@ -187,10 +287,11 @@ void app_main(void)
             play_flag = (play_flag!=0)?0:1;
             printf("test enable = %d\n", play_flag);
             btn1 = 0;
-            brightness += 10;
-            lcd_set_brightness(brightness);
-            lcd_set_sleep(play_flag);
+            // brightness += 10;
+            // lcd_set_brightness(brightness);
+            // lcd_set_sleep(play_flag);
             // power_off();
+            ccw_clock_state = (ccw_clock_state!=0)?0:1;
         } 
         if (btn2)
         {
@@ -203,8 +304,9 @@ void app_main(void)
             printf("end play\n");
             btn2 = 0;
 
-            brightness -= 10;
-            lcd_set_brightness(brightness);
+            // brightness -= 10;
+            // lcd_set_brightness(brightness);
+            ccw_clock_state = 2;
         }
 
         vTaskDelay(10 / portTICK_PERIOD_MS);

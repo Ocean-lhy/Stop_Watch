@@ -1,1 +1,1 @@
-GEN_CSRCS += _hour_needle_alpha_80x10.c _min_needle_alpha_150x7.c _second_needle_alpha_185x15.c
+GEN_CSRCS += _m5logo2022_alpha_90x72.c _hour_needle_alpha_80x10.c _min_needle_alpha_150x7.c _second_needle_alpha_185x18.c _second_needle_alpha_140x15.c _min_needle_alpha_200x6.c
