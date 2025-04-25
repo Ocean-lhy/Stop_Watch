@@ -44,24 +44,9 @@ void sleep_mode(uint8_t sleep_mode);
 
 void app_main(void)
 {
-    size_t psram_size = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
-    size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-    printf("PSRAM size: %d bytes, free: %d bytes\n", psram_size, psram_free);
-
-    // 初始化NVS存储
-    nvs_init();
-    vTaskDelay(3000 / portTICK_PERIOD_MS);
-    printf("app main start\r\n");
-
-    // 打印芯片信息
-    print_chip_info();
-
-    // 创建触摸互斥量
-    touch_mux = xSemaphoreCreateBinary();
-    assert(touch_mux);
 
     // 初始化全局中断
-    global_irq_init();
+    // global_irq_init();
     
     // 初始化I2C总线
     i2c_config_t conf;
@@ -87,42 +72,41 @@ void app_main(void)
     
     // RX8130
     ESP_LOGI(TAG, "RX8130 init");
-    rx8130_init(i2c_bus);
+    // rx8130_init(i2c_bus);
 
     // 初始化各个驱动
     ESP_LOGI(TAG, "motor_init");
-    motor_init();
+    // motor_init();
     ESP_LOGI(TAG, "pi4io_init");
     pi4io_init(i2c_bus);
-    pi4io_5V_out_disable();
     
     // 充电管理
     ESP_LOGI(TAG, "aw32001_init");
-    aw32001_init(i2c_bus);
-    aw32001_charge_set(true);
+    // aw32001_init(i2c_bus);
+    // aw32001_charge_set(true);
 
     // 电量计
     ESP_LOGI(TAG, "bq27220_init");
-    bq27220_init(i2c_bus);
-    bq27220_exit_sealed();
-    bq27220_full_access();
-    bq27220_enter_cfg_update();
+    // bq27220_init(i2c_bus);
+    // bq27220_exit_sealed();
+    // bq27220_full_access();
+    // bq27220_enter_cfg_update();
 
     // IMU
     ESP_LOGI(TAG, "bmi270_dev_init");
-    bmi270_dev_init(i2c_bus);
+    // bmi270_dev_init(i2c_bus);
 
     // ES8311 音频
     ESP_LOGI(TAG, "es8311_driver_init");
-    es8311_driver_init(i2c_bus);
+    // es8311_driver_init(i2c_bus);
 
     // 触摸
     ESP_LOGI(TAG, "cst9217_init");
-    cst9217_init(i2c_bus);
+    // cst9217_init(i2c_bus);
 
     // LCD
     ESP_LOGI(TAG, "lcd_init");
-    lcd_init();
+    // lcd_init();
 
     // bool timer_triggered = false;
     // rx8130_is_timer_triggered(&timer_triggered);
@@ -138,75 +122,33 @@ void app_main(void)
     // }
     // rx8130_enable_timer(true);
 
-    // sleep_mode(2);
-
-    // 设置G3-G8 G11为输出
+    // key1 key2 push pull high
     gpio_config_t io_conf = {};
     io_conf.intr_type = GPIO_INTR_DISABLE;    // 禁用中断
     io_conf.mode = GPIO_MODE_OUTPUT;           // 设置为输出模式
-    io_conf.pin_bit_mask = ((1ULL<<3) | (1ULL<<4) | (1ULL<<5) | (1ULL<<6) | (1ULL<<7) | (1ULL<<8) | (1ULL<<11)); // G3-G7
+    io_conf.pin_bit_mask = ((1ULL<<1) | (1ULL<<2) | (1ULL<<21) | (1ULL<<39));
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
     gpio_config(&io_conf);
 
-    // 设置输出
-    gpio_set_level(GPIO_NUM_3, 0);
-    gpio_set_level(GPIO_NUM_4, 0); 
-    gpio_set_level(GPIO_NUM_5, 0);
-    gpio_set_level(GPIO_NUM_6, 0);
-    gpio_set_level(GPIO_NUM_7, 0);
-    gpio_set_level(GPIO_NUM_8, 0);
-    gpio_set_level(GPIO_NUM_11, 0);
+    gpio_set_level(GPIO_NUM_1, 1);
+    gpio_set_level(GPIO_NUM_2, 1);
+    gpio_set_level(GPIO_NUM_21, 1);
+    gpio_set_level(GPIO_NUM_39, 1);
+
+    gpio_config_t input_io_conf = {};
+    input_io_conf.intr_type = GPIO_INTR_DISABLE;
+    input_io_conf.mode = GPIO_MODE_DISABLE;
+    input_io_conf.pin_bit_mask = ((1ULL<<38) | (1ULL<<46) | (1ULL<<45) | (1ULL<<40) | (1ULL<<42) | (1ULL<<41));
+    input_io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    input_io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    gpio_config(&input_io_conf);
+
+    sleep_mode(2);
     
-    uint8_t brightness = 0xFF;
     ESP_LOGI(TAG, "Start main loop");
     while (1)
     {
-        // 定期更新状态
-        if (esp_timer_get_time() - last_blink_time > 3000000)
-        {
-            last_blink_time = esp_timer_get_time();
-            led_blink = !led_blink;
-            
-            // 更新状态信息
-            aw32001_check_status();
-            bmi270_dev_update();
-            bq27220_read_voltage();
-            bq27220_read_current();
-            uint8_t vin_det = pi4io_vin_detect();
-            printf("vin_det = %d\n", vin_det);
-            printf("\r\n");
-
-            vTaskDelay(100 / portTICK_PERIOD_MS);
-        }
-
-        // 按键处理
-        if (btn1)
-        {
-            printf("btn1 pressed\n");
-            play_flag = (play_flag!=0)?0:1;
-            printf("test enable = %d\n", play_flag);
-            btn1 = 0;
-            brightness += 10;
-            lcd_set_brightness(brightness);
-            lcd_set_sleep(play_flag);
-            // power_off();
-        } 
-        if (btn2)
-        {
-            printf("btn2 pressed\n");
-            
-            size_t bytes_written = 0;
-            printf("start play\n");
-            // i2s_write(I2S_NUM_0, test_pcm_start, test_pcm_end - test_pcm_start, &bytes_written, portMAX_DELAY);
-            // i2s_zero_dma_buffer(I2S_NUM_0);
-            printf("end play\n");
-            btn2 = 0;
-
-            brightness -= 10;
-            lcd_set_brightness(brightness);
-        }
-
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
@@ -231,8 +173,9 @@ void sleep_mode(uint8_t sleep_mode) // 0: wake up, 1: light sleep, 2: deep sleep
     else 
     if (sleep_mode == 2)
     {
-        bq27220_enter_sleep_mode();
-        bmi270_dev_sleep();
+        // bq27220_enter_sleep_mode();
+        // bmi270_dev_sleep();
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
         esp_deep_sleep_start();
     }
     while (1)
