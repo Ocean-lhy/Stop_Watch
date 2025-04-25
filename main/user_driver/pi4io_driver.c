@@ -41,7 +41,7 @@ void pi4io_init(i2c_bus_handle_t i2c_bus)
     vTaskDelay(10 / portTICK_PERIOD_MS);
     i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_H_IM, 0b00001100); // 使用到的引脚关闭High-Impedance
     vTaskDelay(10 / portTICK_PERIOD_MS);
-    i2c_bus_write_byte(pi4io_dev, PI4IO_REG_PULL_SEL, 0b11110011); // pull up/down select, 0 down, 1 up
+    i2c_bus_write_byte(pi4io_dev, PI4IO_REG_PULL_SEL, 0b00000000); // pull up/down select, 0 down, 1 up
     vTaskDelay(10 / portTICK_PERIOD_MS);
     i2c_bus_write_byte(pi4io_dev, PI4IO_REG_PULL_EN, 0b11110011); // pull up/down enable, 0 disable, 1 enable
     vTaskDelay(10 / portTICK_PERIOD_MS);

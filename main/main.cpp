@@ -136,13 +136,13 @@ void app_main(void)
     gpio_set_level(GPIO_NUM_21, 1);
     gpio_set_level(GPIO_NUM_39, 1);
 
-    gpio_config_t input_io_conf = {};
-    input_io_conf.intr_type = GPIO_INTR_DISABLE;
-    input_io_conf.mode = GPIO_MODE_DISABLE;
-    input_io_conf.pin_bit_mask = ((1ULL<<38) | (1ULL<<46) | (1ULL<<45) | (1ULL<<40) | (1ULL<<42) | (1ULL<<41));
-    input_io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    input_io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    gpio_config(&input_io_conf);
+    // gpio_config_t input_io_conf = {};
+    // input_io_conf.intr_type = GPIO_INTR_DISABLE;
+    // input_io_conf.mode = GPIO_MODE_DISABLE;
+    // input_io_conf.pin_bit_mask = ((1ULL<<38) | (1ULL<<46) | (1ULL<<45) | (1ULL<<40) | (1ULL<<42) | (1ULL<<41));
+    // input_io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    // input_io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    // gpio_config(&input_io_conf);
 
     sleep_mode(2);
     
