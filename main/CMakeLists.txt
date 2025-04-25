@@ -48,3 +48,5 @@ idf_component_register(
     # EMBED_TXTFILES "test.pcm"
 )
 
+target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_LVGL_H_INCLUDE_SIMPLE=1)
+

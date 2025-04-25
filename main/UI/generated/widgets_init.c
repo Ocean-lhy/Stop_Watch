@@ -78,29 +78,16 @@ void clock_count(int *hour, int *min, int *sec)
 
 
 
-extern int home_analog_analog_clock_1_hour_value;
-extern int home_analog_analog_clock_1_min_value;
-extern int home_analog_analog_clock_1_sec_value;
+extern int screen_analog_clock_1_hour_value;
+extern int screen_analog_clock_1_min_value;
+extern int screen_analog_clock_1_sec_value;
 
-void home_analog_analog_clock_1_timer(lv_timer_t *timer)
+void screen_analog_clock_1_timer(lv_timer_t *timer)
 {
-    clock_count(&home_analog_analog_clock_1_hour_value, &home_analog_analog_clock_1_min_value, &home_analog_analog_clock_1_sec_value);
-    if (lv_obj_is_valid(guider_ui.home_analog_analog_clock_1))
+    clock_count(&screen_analog_clock_1_hour_value, &screen_analog_clock_1_min_value, &screen_analog_clock_1_sec_value);
+    if (lv_obj_is_valid(guider_ui.screen_analog_clock_1))
     {
-        lv_analogclock_set_time(guider_ui.home_analog_analog_clock_1, home_analog_analog_clock_1_hour_value, home_analog_analog_clock_1_min_value, home_analog_analog_clock_1_sec_value);
-    }
-}
-
-extern int call_digital_clock_1_hour_value;
-extern int call_digital_clock_1_min_value;
-extern int call_digital_clock_1_sec_value;
-
-void call_digital_clock_1_timer(lv_timer_t *timer)
-{
-    clock_count_24(&call_digital_clock_1_hour_value, &call_digital_clock_1_min_value, &call_digital_clock_1_sec_value);
-    if (lv_obj_is_valid(guider_ui.call_digital_clock_1))
-    {
-        lv_dclock_set_text_fmt(guider_ui.call_digital_clock_1, "%d:%02d:%02d", call_digital_clock_1_hour_value, call_digital_clock_1_min_value, call_digital_clock_1_sec_value);
+        lv_analogclock_set_time(guider_ui.screen_analog_clock_1, screen_analog_clock_1_hour_value, screen_analog_clock_1_min_value, screen_analog_clock_1_sec_value);
     }
 }
 
