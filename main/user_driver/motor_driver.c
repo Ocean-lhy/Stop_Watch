@@ -26,7 +26,7 @@ typedef struct {
 
 motor_cmd_t motor_button_cmd = {
     .intensity = 100,
-    .duration_ms = 100,
+    .duration_ms = 50,
     .interval_ms = 500,
 };
 
@@ -169,6 +169,20 @@ esp_err_t button_vibrate(void)
     
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     return ESP_OK;
+}
+
+void set_vibrate_cmd(uint8_t intensity, uint32_t duration_ms, uint32_t interval_ms)
+{
+    motor_button_cmd.intensity = intensity;
+    motor_button_cmd.duration_ms = duration_ms;
+    motor_button_cmd.interval_ms = interval_ms;
+}
+
+void get_vibrate_cmd(uint8_t *intensity, uint32_t *duration_ms, uint32_t *interval_ms)
+{
+    *intensity = motor_button_cmd.intensity;
+    *duration_ms = motor_button_cmd.duration_ms;
+    *interval_ms = motor_button_cmd.interval_ms;
 }
 
 // 立即停止电机

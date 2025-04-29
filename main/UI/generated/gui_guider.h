@@ -20,19 +20,65 @@ extern "C" {
 typedef struct
 {
   
-	lv_obj_t *screen_clock;
-	bool screen_clock_del;
-	lv_obj_t *screen_clock_img_logo;
-	lv_obj_t *screen_clock_digital_clock_s;
-	lv_obj_t *screen_clock_datetext_date;
-	lv_obj_t *screen_clock_analog_clock_time;
-	lv_obj_t *screen_clock_canvas_dot;
-	lv_obj_t *screen_ccw;
-	bool screen_ccw_del;
-	lv_obj_t *screen_ccw_digital_clock_s;
-	lv_obj_t *screen_ccw_label_ms;
-	lv_obj_t *screen_ccw_analog_clock_ccw;
-	lv_obj_t *screen_ccw_img_1;
+	lv_obj_t *screen_logo;
+	bool screen_logo_del;
+	lv_obj_t *screen_logo_img_1;
+	lv_obj_t *screen_logo_img_2;
+	lv_obj_t *screen_time;
+	bool screen_time_del;
+	lv_obj_t *screen_time_bar_battery;
+	lv_obj_t *screen_time_label_battery;
+	lv_obj_t *screen_time_tabview_1;
+	lv_obj_t *screen_time_tabview_1_tab_1;
+	lv_obj_t *screen_time_tabview_1_tab_2;
+	lv_obj_t *screen_time_tabview_1_tab_3;
+	lv_obj_t *screen_time_tabview_1_tab_4;
+	lv_obj_t *screen_time_cont_info;
+	lv_obj_t *screen_time_label_touch;
+	lv_obj_t *screen_time_label_charge;
+	lv_obj_t *screen_time_label_accel;
+	lv_obj_t *screen_time_label_gyro;
+	lv_obj_t *screen_time_label_current;
+	lv_obj_t *screen_time_cont_vibra;
+	lv_obj_t *screen_time_slider_time;
+	lv_obj_t *screen_time_slider_intensity;
+	lv_obj_t *screen_time_label_time;
+	lv_obj_t *screen_time_label_intensity;
+	lv_obj_t *screen_time_cont_voice;
+	lv_obj_t *screen_time_btn_record;
+	lv_obj_t *screen_time_btn_record_label;
+	lv_obj_t *screen_time_label_record;
+	lv_obj_t *screen_time_label_play;
+	lv_obj_t *screen_time_btn_play;
+	lv_obj_t *screen_time_btn_play_label;
+	lv_obj_t *screen_time_analog_clock_1;
+	lv_obj_t *screen_info;
+	bool screen_info_del;
+	lv_obj_t *screen_info_bar_battery;
+	lv_obj_t *screen_info_label_battery;
+	lv_obj_t *screen_info_label_current;
+	lv_obj_t *screen_info_label_gyro;
+	lv_obj_t *screen_info_label_accel;
+	lv_obj_t *screen_info_label_charge;
+	lv_obj_t *screen_info_label_touc;
+	lv_obj_t *screen_vibra;
+	bool screen_vibra_del;
+	lv_obj_t *screen_vibra_bar_battery;
+	lv_obj_t *screen_vibra_label_battery;
+	lv_obj_t *screen_vibra_slider_time;
+	lv_obj_t *screen_vibra_slider_intnsity;
+	lv_obj_t *screen_vibra_label_time;
+	lv_obj_t *screen_vibra_label_intensity;
+	lv_obj_t *screen_voice;
+	bool screen_voice_del;
+	lv_obj_t *screen_voice_bar_battery;
+	lv_obj_t *screen_voice_label_battery;
+	lv_obj_t *screen_voice_btn_record;
+	lv_obj_t *screen_voice_btn_record_label;
+	lv_obj_t *screen_voice_label_record;
+	lv_obj_t *screen_voice_label_play;
+	lv_obj_t *screen_voice_btn_play;
+	lv_obj_t *screen_voice_btn_play_label;
 }lv_ui;
 
 typedef void (*ui_setup_scr_t)(lv_ui * ui);
@@ -56,20 +102,28 @@ void init_keyboard(lv_ui *ui);
 extern lv_ui guider_ui;
 
 
-void setup_scr_screen_clock(lv_ui *ui);
-void setup_scr_screen_ccw(lv_ui *ui);
-LV_IMG_DECLARE(_m5logo2022_alpha_90x72);
-LV_IMG_DECLARE(_hour_needle_alpha_80x10);
-LV_IMG_DECLARE(_min_needle_alpha_150x7);
-LV_IMG_DECLARE(_second_needle_alpha_185x18);
-LV_IMG_DECLARE(_second_needle_alpha_140x15);
-LV_IMG_DECLARE(_min_needle_alpha_200x6);
+void setup_scr_screen_logo(lv_ui *ui);
+void setup_scr_screen_time(lv_ui *ui);
+void setup_scr_screen_info(lv_ui *ui);
+void setup_scr_screen_vibra(lv_ui *ui);
+void setup_scr_screen_voice(lv_ui *ui);
+LV_IMG_DECLARE(_StopWATCHUImodified_alpha_466x466);
+LV_IMG_DECLARE(_StopWATCHUI1_alpha_466x466);
 
-LV_FONT_DECLARE(lv_font_montserratMedium_20)
+LV_IMG_DECLARE(_StopWATCHUI2modified_466x466);
+LV_IMG_DECLARE(_img_clockwise_hour_alpha_18x98);
+LV_IMG_DECLARE(_img_clockwise_min_alpha_18x157);
+LV_IMG_DECLARE(_img_clockwise_sec_alpha_31x180);
+
+LV_IMG_DECLARE(_StopWATCHUI2modified_466x466);
+
+LV_IMG_DECLARE(_StopWATCHUI2modified_466x466);
+
+LV_IMG_DECLARE(_StopWATCHUI2modified_466x466);
+
 LV_FONT_DECLARE(lv_font_montserratMedium_16)
-LV_FONT_DECLARE(lv_font_montserratMedium_18)
-LV_FONT_DECLARE(lv_font_Acme_Regular_28)
-LV_FONT_DECLARE(lv_font_montserratMedium_26)
+LV_FONT_DECLARE(lv_font_montserratMedium_12)
+LV_FONT_DECLARE(lv_font_Acme_Regular_22)
 
 
 #ifdef __cplusplus

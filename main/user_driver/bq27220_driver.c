@@ -181,6 +181,19 @@ uint16_t bq27220_read_current()
     return current;
 }
 
+uint8_t bq27220_get_soc()
+{
+    uint16_t soc;
+    i2c_bus_read_bytes(bq27220_dev, 0x08, 2, (uint8_t *)&soc);
+    soc = soc * 100 / 4200;
+    ESP_LOGI(TAG, "battery SOC: %d%%", soc);
+    if (soc > 100)
+    {
+        soc = 100;
+    }
+    return (uint8_t)soc;
+}
+
 void bq27220_read_dev_number()
 {
     uint8_t data[4];

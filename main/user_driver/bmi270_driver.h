@@ -19,6 +19,8 @@ void bmi270_dev_init(i2c_bus_handle_t i2c_bus);
 // 更新BMI270数据
 void bmi270_dev_update();
 
+void bmi270_get_data(int *ax, int *ay, int *az, int *gx, int *gy, int *gz);
+
 // BMI270 I2C读取回调
 int8_t bmi2_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *intf_ptr);
 

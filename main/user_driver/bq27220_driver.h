@@ -43,6 +43,9 @@ uint16_t bq27220_read_voltage();
 // 读取电池电流
 uint16_t bq27220_read_current();
 
+// 读取电池电量百分比
+uint8_t bq27220_get_soc();
+
 // 读取设备编号
 void bq27220_read_dev_number();
 

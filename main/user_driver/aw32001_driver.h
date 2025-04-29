@@ -18,7 +18,7 @@
 void aw32001_init(i2c_bus_handle_t i2c_bus);
 
 // 检查充电状态
-void aw32001_check_status();
+uint8_t aw32001_check_status();
 
 // 启用/禁用充电
 void aw32001_charge_set(bool en);

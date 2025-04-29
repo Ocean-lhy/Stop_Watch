@@ -6,10 +6,18 @@
 #include "soc/soc_caps.h"
 #include "esp_codec_dev.h"
 #include "esp_codec_dev_defaults.h"
+#include "esp_littlefs.h"
+#include <string.h>
+#include <errno.h>
 
 static const char *TAG = "es8311_driver";
 i2c_bus_device_handle_t es8311_dev = NULL;
 uint8_t play_flag = 2;
+bool is_recording = false;
+bool is_playing = false;
+
+#define RECORD_FILE "/littlefs/record.pcm"
+#define RECORD_BUFFER_SIZE (1024 * 4)
 
 extern const uint8_t test_pcm_start[] asm("_binary_test_pcm_start");
 extern const uint8_t test_pcm_end[]   asm("_binary_test_pcm_end");
@@ -106,4 +114,105 @@ void record_and_play_task(void *arg)
         }
     }
     free(record_cache);
+}
+
+void start_recording(void)
+{
+    if (is_recording) {
+        ESP_LOGI(TAG, "Already recording");
+        return;
+    }
+    
+    is_recording = true;
+    is_playing = false;
+    
+    // 打开文件准备写入
+    FILE *f = fopen(RECORD_FILE, "wb");
+    if (f == NULL) {
+        ESP_LOGE(TAG, "Failed to open file for recording: %s", strerror(errno));
+        is_recording = false;
+        return;
+    }
+    
+    uint8_t *record_buffer = (uint8_t *)malloc(RECORD_BUFFER_SIZE);
+    if (record_buffer == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate record buffer");
+        fclose(f);
+        is_recording = false;
+        return;
+    }
+    
+    size_t bytes_read;
+    while (is_recording) {
+        if (i2s_read(I2S_NUM_0, record_buffer, RECORD_BUFFER_SIZE, &bytes_read, portMAX_DELAY) == ESP_OK) {
+            size_t bytes_written = fwrite(record_buffer, 1, bytes_read, f);
+            if (bytes_written != bytes_read) {
+                ESP_LOGE(TAG, "Failed to write to file: %s", strerror(errno));
+                break;
+            }
+            
+        }
+    }
+    
+    fclose(f);
+    free(record_buffer);
+    ESP_LOGI(TAG, "Recording stopped");
+}
+
+void play_recording(void)
+{
+    if (is_playing) {
+        ESP_LOGI(TAG, "Already playing");
+        return;
+    }
+    
+    is_playing = true;
+    is_recording = false;
+    
+    FILE *f = fopen(RECORD_FILE, "rb");
+    if (f == NULL) {
+        ESP_LOGE(TAG, "Failed to open file for playing: %s", strerror(errno));
+        is_playing = false;
+        return;
+    }
+    
+    uint8_t *play_buffer = (uint8_t *)malloc(RECORD_BUFFER_SIZE);
+    if (play_buffer == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate play buffer");
+        fclose(f);
+        is_playing = false;
+        return;
+    }
+    
+    size_t bytes_read;
+    while (is_playing) {
+        bytes_read = fread(play_buffer, 1, RECORD_BUFFER_SIZE, f);
+        if (bytes_read == 0) {
+            if (ferror(f)) {
+                ESP_LOGE(TAG, "Error reading file: %s", strerror(errno));
+            }
+            break;
+        }
+        
+        size_t bytes_written;
+        if (i2s_write(I2S_NUM_0, play_buffer, bytes_read, &bytes_written, portMAX_DELAY) != ESP_OK) {
+            ESP_LOGE(TAG, "i2s_write failed");
+            break;
+        }
+    }
+    
+    fclose(f);
+    free(play_buffer);
+    is_playing = false;
+    ESP_LOGI(TAG, "Playback finished");
+}
+
+void stop_recording(void)
+{
+    is_recording = false;
+}
+
+void stop_playing(void)
+{
+    is_playing = false;
 }

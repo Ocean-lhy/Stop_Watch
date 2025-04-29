@@ -1,1 +1,1 @@
-GEN_CSRCS += _m5logo2022_alpha_90x72.c _hour_needle_alpha_80x10.c _min_needle_alpha_150x7.c _second_needle_alpha_185x18.c _second_needle_alpha_140x15.c _min_needle_alpha_200x6.c
+GEN_CSRCS += _StopWATCHUImodified_alpha_466x466.c _StopWATCHUI1_alpha_466x466.c _StopWATCHUI2modified_466x466.c _img_clockwise_hour_alpha_18x98.c _img_clockwise_min_alpha_18x157.c _img_clockwise_sec_alpha_31x180.c

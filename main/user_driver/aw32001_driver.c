@@ -28,7 +28,7 @@ void aw32001_init(i2c_bus_handle_t i2c_bus)
     i2c_bus_write_byte(aw32001_dev, 0x05, 0b00000110);
 }
 
-void aw32001_check_status()
+uint8_t aw32001_check_status()
 {
     uint8_t in_data;
     i2c_bus_read_byte(aw32001_dev, AW32001_REG_SYS_STA, &in_data);
@@ -37,18 +37,22 @@ void aw32001_check_status()
     if ((in_data & 0b00011000) == 0b00011000)
     {
         ESP_LOGI(TAG, "bat charging done");
+        return 1;
     }
     else if ((in_data & 0b00011000) == 0b00010000)
     {
         ESP_LOGI(TAG, "bat charging");
+        return 2;
     }
     else if ((in_data & 0b00011000) == 0b00001000)
     {
         ESP_LOGI(TAG, "bat pre charging");
+        return 3;
     }
     else
     {
         ESP_LOGI(TAG, "bat not charging");
+        return 0;
     }
 }
 

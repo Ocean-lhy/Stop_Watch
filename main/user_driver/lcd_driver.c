@@ -160,12 +160,12 @@ void example_lvgl_port_task(void *arg)
             // 释放互斥锁
             example_lvgl_unlock();
         }
-        if (task_delay_ms > EXAMPLE_LVGL_TASK_MAX_DELAY_MS) {
-            task_delay_ms = EXAMPLE_LVGL_TASK_MAX_DELAY_MS;
-        } else if (task_delay_ms < EXAMPLE_LVGL_TASK_MIN_DELAY_MS) {
-            task_delay_ms = EXAMPLE_LVGL_TASK_MIN_DELAY_MS;
-        }
-        vTaskDelay(pdMS_TO_TICKS(task_delay_ms));
+        // if (task_delay_ms > EXAMPLE_LVGL_TASK_MAX_DELAY_MS) {
+        //     task_delay_ms = EXAMPLE_LVGL_TASK_MAX_DELAY_MS;
+        // } else if (task_delay_ms < EXAMPLE_LVGL_TASK_MIN_DELAY_MS) {
+        //     task_delay_ms = EXAMPLE_LVGL_TASK_MIN_DELAY_MS;
+        // }
+        vTaskDelay(pdMS_TO_TICKS(EXAMPLE_LVGL_TASK_MIN_DELAY_MS));
     }
 }
 
