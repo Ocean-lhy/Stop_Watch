@@ -38,8 +38,6 @@ extern "C"
 // extern const uint8_t test_pcm_start[] asm("_binary_test_pcm_start");
 // extern const uint8_t test_pcm_end[]   asm("_binary_test_pcm_end");
 
-extern uint8_t play_flag;
-    
 lv_ui guider_ui;
 i2c_bus_handle_t i2c_bus = NULL;
 static uint64_t last_update_time = 0;
@@ -58,6 +56,7 @@ uint8_t charge_status = 0;
 // 录音和播放标志
 extern bool is_recording;
 extern bool is_playing;
+uint32_t recording_start_time = 0;
 
 // 当前界面类型
 typedef enum {
@@ -66,6 +65,7 @@ typedef enum {
     SCREEN_INFO,
     SCREEN_VIBRA,
     SCREEN_VOICE,
+    SCREEN_IMG,
     SCREEN_UNKNOWN
 } screen_type_t;
 
@@ -290,8 +290,8 @@ void app_main(void)
             bmi270_get_data(&accel_x, &accel_y, &accel_z, &gyro_x, &gyro_y, &gyro_z);
             
             uint8_t vin_det = pi4io_vin_detect();
-            printf("vin_det = %d\n", vin_det);
-            printf("\r\n");
+            // printf("vin_det = %d\n", vin_det);
+            // printf("\r\n");
 
             update_data = true;
             // vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -303,10 +303,6 @@ void app_main(void)
         {
             btn1 = 0;
             printf("btn1 pressed\n");
-            // play_flag = (play_flag!=0)?0:1;
-            // printf("test enable = %d\n", play_flag);
-            // ccw_clock_state = (ccw_clock_state!=0)?0:1;
-            // es8311_test(play_flag);
             if (example_lvgl_lock(-1))
             {
                 uint8_t key = 2;
@@ -320,10 +316,6 @@ void app_main(void)
             printf("btn2 pressed\n");
             
             btn2 = 0;
-
-            // brightness -= 10;
-            // lcd_set_brightness(brightness);
-            // ccw_clock_state = 2;
             if (example_lvgl_lock(-1))
             {
                 uint8_t key = 1;
@@ -384,6 +376,8 @@ screen_type_t get_current_screen(void)
         return SCREEN_VIBRA;
     } else if (current_scr == guider_ui.screen_voice) {
         return SCREEN_VOICE;
+    } else if (current_scr == guider_ui.screen_img) {
+        return SCREEN_IMG;
     }
     
     return SCREEN_UNKNOWN;
@@ -398,6 +392,7 @@ void update_screen_data(void)
     static char gyro_buffer[32];
     static char touch_buffer[32];
     static char charge_buffer[32];
+    static char record_time_buffer[32];
     current_screen = get_current_screen();
     if (example_lvgl_lock(20))
     {
@@ -412,9 +407,14 @@ void update_screen_data(void)
                 {
                     if (update_data)
                     {
-                        if (lv_obj_is_valid(guider_ui.screen_time_label_battery) && guider_ui.screen_time_label_battery != NULL) {
+                        if (lv_obj_is_valid(guider_ui.screen_time_label_battery) && guider_ui.screen_time_label_battery != NULL) 
+                        {
                             sprintf(battery_level_buffer, "%d%% %.1fV", battery_level, voltage);
                             lv_label_set_text_static(guider_ui.screen_time_label_battery, battery_level_buffer);
+                        }
+                        if (lv_obj_is_valid(guider_ui.screen_time_bar_battery) && guider_ui.screen_time_bar_battery != NULL)
+                        {
+                            lv_bar_set_value(guider_ui.screen_time_bar_battery, battery_level, LV_ANIM_OFF);
                         }
                         update_data = false;
                     }
@@ -426,17 +426,24 @@ void update_screen_data(void)
                 // 电池信息
                 if (update_data)
                 {
-                    if (lv_obj_is_valid(guider_ui.screen_info_label_battery) && guider_ui.screen_info_label_battery!= NULL) {
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_battery) && guider_ui.screen_info_label_battery!= NULL) 
+                    {
                         sprintf(battery_level_buffer, "%d%% %.1fV", battery_level, voltage);
                         lv_label_set_text_static(guider_ui.screen_info_label_battery, battery_level_buffer);
                     }
+                    if (lv_obj_is_valid(guider_ui.screen_info_bar_battery) && guider_ui.screen_info_bar_battery != NULL)
+                    {
+                        lv_bar_set_value(guider_ui.screen_info_bar_battery, battery_level, LV_ANIM_OFF);
+                    }
                     
-                    if (lv_obj_is_valid(guider_ui.screen_info_label_current) && guider_ui.screen_info_label_current != NULL) {
-                        sprintf(current_buffer, "current: %dmA", current);
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_current) && guider_ui.screen_info_label_current != NULL) 
+                    {
+                        sprintf(current_buffer, "current reg: %d", current);
                         lv_label_set_text_static(guider_ui.screen_info_label_current, current_buffer);
                     }
 
-                    if (lv_obj_is_valid(guider_ui.screen_info_label_charge) && guider_ui.screen_info_label_charge != NULL) {
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_charge) && guider_ui.screen_info_label_charge != NULL) 
+                    {
                         if (charge_status == 0)
                         {
                             strcpy(charge_buffer, "bat not charging");
@@ -457,12 +464,14 @@ void update_screen_data(void)
                     }
                     
                     // 更新IMU数据
-                    if (lv_obj_is_valid(guider_ui.screen_info_label_accel) && guider_ui.screen_info_label_accel != NULL) {
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_accel) && guider_ui.screen_info_label_accel != NULL) 
+                    {
                         sprintf(accel_buffer, "Accel: X:%d, Y:%d, Z:%d", accel_x, accel_y, accel_z);
                         lv_label_set_text_static(guider_ui.screen_info_label_accel, accel_buffer);
                     }
                     
-                    if (lv_obj_is_valid(guider_ui.screen_info_label_gyro) && guider_ui.screen_info_label_gyro != NULL) {
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_gyro) && guider_ui.screen_info_label_gyro != NULL) 
+                    {
                         sprintf(gyro_buffer, "Gyro: X:%d, Y:%d, Z:%d", gyro_x, gyro_y, gyro_z);
                         lv_label_set_text_static(guider_ui.screen_info_label_gyro, gyro_buffer);
                     }
@@ -471,7 +480,8 @@ void update_screen_data(void)
 
                 if (tp_info[0].switch_ != 0x00)
                 {
-                    if (lv_obj_is_valid(guider_ui.screen_info_label_touc) && guider_ui.screen_info_label_touc != NULL) {
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_touc) && guider_ui.screen_info_label_touc != NULL) 
+                    {
                         sprintf(touch_buffer, "Touch: %d, %d", tp_info[0].x, tp_info[0].y);
                         lv_label_set_text_static(guider_ui.screen_info_label_touc, touch_buffer);
                     }
@@ -481,9 +491,14 @@ void update_screen_data(void)
             case SCREEN_VIBRA:
                 if (update_data)
                 {
-                    if (lv_obj_is_valid(guider_ui.screen_vibra_label_battery) && guider_ui.screen_vibra_label_battery != NULL) {
+                    if (lv_obj_is_valid(guider_ui.screen_vibra_label_battery) && guider_ui.screen_vibra_label_battery != NULL) 
+                    {
                         sprintf(battery_level_buffer, "%d%% %.1fV", battery_level, voltage);
                         lv_label_set_text_static(guider_ui.screen_vibra_label_battery, battery_level_buffer);
+                    }
+                    if (lv_obj_is_valid(guider_ui.screen_vibra_bar_battery) && guider_ui.screen_vibra_bar_battery != NULL)
+                    {
+                        lv_bar_set_value(guider_ui.screen_vibra_bar_battery, battery_level, LV_ANIM_OFF);
                     }
                     update_data = false;
                 }
@@ -492,14 +507,53 @@ void update_screen_data(void)
             case SCREEN_VOICE:
                 if (update_data)
                 {
-                    if (lv_obj_is_valid(guider_ui.screen_voice_label_battery) && guider_ui.screen_voice_label_battery != NULL) {
+                    if (lv_obj_is_valid(guider_ui.screen_voice_label_battery) && guider_ui.screen_voice_label_battery != NULL) 
+                    {
                         sprintf(battery_level_buffer, "%d%% %.1fV", battery_level, voltage);
                         lv_label_set_text_static(guider_ui.screen_voice_label_battery, battery_level_buffer);
+                    }
+                    if (lv_obj_is_valid(guider_ui.screen_voice_bar_battery) && guider_ui.screen_voice_bar_battery != NULL)
+                    {
+                        lv_bar_set_value(guider_ui.screen_voice_bar_battery, battery_level, LV_ANIM_OFF);
+                    }
+                    update_data = false;
+                }
+                if (is_recording || is_playing)
+                {
+                    if (recording_start_time == 0)
+                    {
+                        recording_start_time = esp_timer_get_time();
+                    }
+                    if (lv_obj_is_valid(guider_ui.screen_voice_label_record) && guider_ui.screen_voice_label_record != NULL) 
+                    {
+                        float recording_time = (esp_timer_get_time() - recording_start_time) / 1000000.0f;
+                        sprintf(record_time_buffer, "%.1fs", recording_time);
+                        lv_label_set_text_static(guider_ui.screen_voice_label_record, record_time_buffer);
+                    }
+                }
+                else
+                {
+                    recording_start_time = 0;
+                }
+                break;
+            case SCREEN_IMG:
+                if (update_data)
+                {
+                    // 根据BMI270的旋转角度旋转图片
+                    if (lv_obj_is_valid(guider_ui.screen_img_img) && guider_ui.screen_img_img != NULL) {
+                        // 使用陀螺仪数据计算旋转角度
+                        int16_t angle = (int16_t)(atan2(accel_y, accel_x) * 180.0 / M_PI);
+                        // 确保角度在0-360度范围内
+                        if(angle < 0) {
+                            angle += 360;
+                        }
+                        ESP_LOGI(TAG, "angle = %d", angle);
+                        // 设置图片旋转角度
+                        lv_img_set_angle(guider_ui.screen_img_img, angle * 10); // LVGL中角度需要乘以10
                     }
                     update_data = false;
                 }
                 break;
-                
             default:
                 break;
         }

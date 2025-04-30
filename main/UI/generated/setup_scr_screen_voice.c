@@ -75,13 +75,13 @@ void setup_scr_screen_voice(lv_ui *ui)
     //Write codes screen_voice_btn_record
     ui->screen_voice_btn_record = lv_btn_create(ui->screen_voice);
     ui->screen_voice_btn_record_label = lv_label_create(ui->screen_voice_btn_record);
-    lv_label_set_text(ui->screen_voice_btn_record_label, "record");
+    lv_label_set_text(ui->screen_voice_btn_record_label, "start record");
     lv_label_set_long_mode(ui->screen_voice_btn_record_label, LV_LABEL_LONG_WRAP);
     lv_obj_align(ui->screen_voice_btn_record_label, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_pad_all(ui->screen_voice_btn_record, 0, LV_STATE_DEFAULT);
     lv_obj_set_width(ui->screen_voice_btn_record_label, LV_PCT(100));
-    lv_obj_set_pos(ui->screen_voice_btn_record, 158, 153);
-    lv_obj_set_size(ui->screen_voice_btn_record, 148, 50);
+    lv_obj_set_pos(ui->screen_voice_btn_record, 132, 129);
+    lv_obj_set_size(ui->screen_voice_btn_record, 212, 91);
 
     //Write style for screen_voice_btn_record, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
     lv_obj_set_style_bg_opa(ui->screen_voice_btn_record, 255, LV_PART_MAIN|LV_STATE_DEFAULT);
@@ -99,7 +99,7 @@ void setup_scr_screen_voice(lv_ui *ui)
     ui->screen_voice_label_record = lv_label_create(ui->screen_voice);
     lv_label_set_text(ui->screen_voice_label_record, "0.0s");
     lv_label_set_long_mode(ui->screen_voice_label_record, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(ui->screen_voice_label_record, 158, 120);
+    lv_obj_set_pos(ui->screen_voice_label_record, 158, 97);
     lv_obj_set_size(ui->screen_voice_label_record, 159, 20);
 
     //Write style for screen_voice_label_record, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
@@ -118,39 +118,16 @@ void setup_scr_screen_voice(lv_ui *ui)
     lv_obj_set_style_pad_left(ui->screen_voice_label_record, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
     lv_obj_set_style_shadow_width(ui->screen_voice_label_record, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
 
-    //Write codes screen_voice_label_play
-    ui->screen_voice_label_play = lv_label_create(ui->screen_voice);
-    lv_label_set_text(ui->screen_voice_label_play, "");
-    lv_label_set_long_mode(ui->screen_voice_label_play, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(ui->screen_voice_label_play, 158, 228);
-    lv_obj_set_size(ui->screen_voice_label_play, 159, 20);
-
-    //Write style for screen_voice_label_play, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
-    lv_obj_set_style_border_width(ui->screen_voice_label_play, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_radius(ui->screen_voice_label_play, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_color(ui->screen_voice_label_play, lv_color_hex(0xffffff), LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui->screen_voice_label_play, &lv_font_montserratMedium_16, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(ui->screen_voice_label_play, 255, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_letter_space(ui->screen_voice_label_play, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_line_space(ui->screen_voice_label_play, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_align(ui->screen_voice_label_play, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui->screen_voice_label_play, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(ui->screen_voice_label_play, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_right(ui->screen_voice_label_play, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(ui->screen_voice_label_play, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_left(ui->screen_voice_label_play, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_shadow_width(ui->screen_voice_label_play, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-
     //Write codes screen_voice_btn_play
     ui->screen_voice_btn_play = lv_btn_create(ui->screen_voice);
     ui->screen_voice_btn_play_label = lv_label_create(ui->screen_voice_btn_play);
-    lv_label_set_text(ui->screen_voice_btn_play_label, "play");
+    lv_label_set_text(ui->screen_voice_btn_play_label, "loop test");
     lv_label_set_long_mode(ui->screen_voice_btn_play_label, LV_LABEL_LONG_WRAP);
     lv_obj_align(ui->screen_voice_btn_play_label, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_pad_all(ui->screen_voice_btn_play, 0, LV_STATE_DEFAULT);
     lv_obj_set_width(ui->screen_voice_btn_play_label, LV_PCT(100));
-    lv_obj_set_pos(ui->screen_voice_btn_play, 158, 265);
-    lv_obj_set_size(ui->screen_voice_btn_play, 148, 50);
+    lv_obj_set_pos(ui->screen_voice_btn_play, 132, 243);
+    lv_obj_set_size(ui->screen_voice_btn_play, 208, 87);
 
     //Write style for screen_voice_btn_play, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
     lv_obj_set_style_bg_opa(ui->screen_voice_btn_play, 255, LV_PART_MAIN|LV_STATE_DEFAULT);
@@ -165,7 +142,7 @@ void setup_scr_screen_voice(lv_ui *ui)
     lv_obj_set_style_text_align(ui->screen_voice_btn_play, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN|LV_STATE_DEFAULT);
 
     //The custom code of screen_voice.
-
+    lv_obj_add_state(ui->screen_voice_btn_record, LV_STATE_DISABLED);
 
     //Update current screen layout.
     lv_obj_update_layout(ui->screen_voice);

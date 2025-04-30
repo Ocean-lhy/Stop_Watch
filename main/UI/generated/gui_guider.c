@@ -80,6 +80,7 @@ void init_scr_del_flag(lv_ui *ui)
     ui->screen_info_del = true;
     ui->screen_vibra_del = true;
     ui->screen_voice_del = true;
+    ui->screen_img_del = true;
 }
 
 void setup_ui(lv_ui *ui)

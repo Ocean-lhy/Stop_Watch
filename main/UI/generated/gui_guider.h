@@ -76,9 +76,15 @@ typedef struct
 	lv_obj_t *screen_voice_btn_record;
 	lv_obj_t *screen_voice_btn_record_label;
 	lv_obj_t *screen_voice_label_record;
-	lv_obj_t *screen_voice_label_play;
 	lv_obj_t *screen_voice_btn_play;
 	lv_obj_t *screen_voice_btn_play_label;
+	lv_obj_t *screen_img;
+	bool screen_img_del;
+	lv_obj_t *screen_img_img;
+	lv_obj_t *screen_img_img_1;
+	lv_obj_t *screen_img_img_2;
+	lv_obj_t *screen_img_img_3;
+	lv_obj_t *screen_img_img_4;
 }lv_ui;
 
 typedef void (*ui_setup_scr_t)(lv_ui * ui);
@@ -107,6 +113,7 @@ void setup_scr_screen_time(lv_ui *ui);
 void setup_scr_screen_info(lv_ui *ui);
 void setup_scr_screen_vibra(lv_ui *ui);
 void setup_scr_screen_voice(lv_ui *ui);
+void setup_scr_screen_img(lv_ui *ui);
 LV_IMG_DECLARE(_StopWATCHUImodified_alpha_466x466);
 LV_IMG_DECLARE(_StopWATCHUI1_alpha_466x466);
 
@@ -120,6 +127,11 @@ LV_IMG_DECLARE(_StopWATCHUI2modified_466x466);
 LV_IMG_DECLARE(_StopWATCHUI2modified_466x466);
 
 LV_IMG_DECLARE(_StopWATCHUI2modified_466x466);
+LV_IMG_DECLARE(_db1modified_alpha_466x466);
+LV_IMG_DECLARE(_raianglemodified_alpha_50x20);
+LV_IMG_DECLARE(_raianglemodified_alpha_50x20);
+LV_IMG_DECLARE(_raianglemodified_alpha_50x20);
+LV_IMG_DECLARE(_raianglemodified_alpha_50x20);
 
 LV_FONT_DECLARE(lv_font_montserratMedium_16)
 LV_FONT_DECLARE(lv_font_montserratMedium_12)

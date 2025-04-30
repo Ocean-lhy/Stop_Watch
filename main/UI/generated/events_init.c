@@ -15,10 +15,15 @@
 #include "freemaster_client.h"
 #endif
 
+#include "es8311_driver.h"
+
 extern bool is_recording;
 extern bool is_playing;
+extern bool is_loop_test;
 
 static char buffer[32];
+
+static uint8_t is_recording_flag = 0;
 
 static void screen_logo_event_handler (lv_event_t *e)
 {
@@ -84,6 +89,7 @@ static void screen_time_event_handler (lv_event_t *e)
         {
             lv_indev_wait_release(lv_indev_get_act());
             ui_load_scr_animation(&guider_ui, &guider_ui.screen_voice, guider_ui.screen_voice_del, &guider_ui.screen_time_del, setup_scr_screen_voice, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
+            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_time_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
             break;
         }
         default:
@@ -105,6 +111,7 @@ static void screen_time_event_handler (lv_event_t *e)
         {
             lv_indev_wait_release(lv_indev_get_act());
             ui_load_scr_animation(&guider_ui, &guider_ui.screen_voice, guider_ui.screen_voice_del, &guider_ui.screen_time_del, setup_scr_screen_voice, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
+            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_time_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
             break;
         }
         default:
@@ -288,6 +295,7 @@ static void screen_voice_event_handler (lv_event_t *e)
         {
             lv_indev_wait_release(lv_indev_get_act());
             ui_load_scr_animation(&guider_ui, &guider_ui.screen_time, guider_ui.screen_time_del, &guider_ui.screen_voice_del, setup_scr_screen_time, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
+            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_voice_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
             break;
         }
         case LV_DIR_RIGHT:
@@ -309,12 +317,25 @@ static void screen_voice_event_handler (lv_event_t *e)
         {
             lv_indev_wait_release(lv_indev_get_act());
             ui_load_scr_animation(&guider_ui, &guider_ui.screen_time, guider_ui.screen_time_del, &guider_ui.screen_voice_del, setup_scr_screen_time, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
+            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_voice_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
             break;
         }
         case 2: // 右键
         {
             lv_indev_wait_release(lv_indev_get_act());
             ui_load_scr_animation(&guider_ui, &guider_ui.screen_vibra, guider_ui.screen_vibra_del, &guider_ui.screen_voice_del, setup_scr_screen_vibra, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
+            break;
+        }
+        case 3: 
+        {
+            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start play");
+            is_recording_flag = 2;
+            break;
+        }
+        case 4:
+        {
+            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start record");
+            is_recording_flag = 0;
             break;
         }
         default:
@@ -333,16 +354,21 @@ static void screen_voice_btn_play_event_handler (lv_event_t *e)
     switch (code) {
     case LV_EVENT_PRESSED:
     {
-        is_playing = !is_playing;
-        if (is_playing) 
+        if (!is_loop_test) 
         {
+            is_loop_test = true;
             is_recording = false;
-            lv_label_set_text(guider_ui.screen_voice_btn_play_label, "playing");
-            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "record");
+            is_playing = false;
+            lv_label_set_text(guider_ui.screen_voice_btn_play_label, "stop");
+            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start record");
+            is_recording_flag = 0;
+            es8311_test(1);
         } 
         else 
         {
-            lv_label_set_text(guider_ui.screen_voice_btn_play_label, "play");
+            is_loop_test = false;
+            lv_label_set_text(guider_ui.screen_voice_btn_play_label, "loop test");
+            es8311_test(0);
         }
         break;
     }
@@ -357,16 +383,62 @@ static void screen_voice_btn_record_event_handler (lv_event_t *e)
     switch (code) {
     case LV_EVENT_PRESSED:
     {
-        is_recording = !is_recording;
-        if (is_recording) {
-            is_playing = false;
-            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "recording");
-            lv_label_set_text(guider_ui.screen_voice_btn_play_label, "play");
+        if (is_loop_test) 
+        {
+            is_loop_test = false;
+            lv_label_set_text(guider_ui.screen_voice_btn_play_label, "loop test");
+            es8311_test(0);
         }
-        else {
-            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "record");
+
+        switch (is_recording_flag)
+        {
+            case 0:
+            {
+                is_recording = true;
+                lv_label_set_text(guider_ui.screen_voice_btn_record_label, "stop record");
+                is_recording_flag = 1;
+            }
+            break;
+            case 1:
+            {
+                is_recording = false;
+                lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start play");
+                is_recording_flag = 2;
+            }
+            break;
+            case 2:
+            {
+                is_recording = false;
+                lv_label_set_text(guider_ui.screen_voice_btn_record_label, "stop play");
+                is_recording_flag = 3;
+            }
+            break;
+            case 3:
+            {
+                is_recording = false;
+                lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start record");
+                is_recording_flag = 0;
+            }
+            break;
         }
         break;
+    }
+    default:
+        break;
+    }
+}
+
+static void screen_voice_btn_label_event_handler (lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    switch (code) {
+    case LV_EVENT_GESTURE:
+    {
+        lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
+        switch(dir) {
+        default:
+            break;
+        }
     }
     default:
         break;
@@ -380,7 +452,61 @@ void events_init_screen_voice (lv_ui *ui)
     lv_obj_add_event_cb(ui->screen_voice_btn_record, screen_voice_btn_record_event_handler, LV_EVENT_ALL, ui);
 }
 
+static void screen_img_event_handler (lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    switch (code) {
+    case LV_EVENT_GESTURE:
+    {
+        lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
+        switch(dir) {
+        case LV_DIR_LEFT:
+        {
+            lv_indev_wait_release(lv_indev_get_act());
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_time, guider_ui.screen_time_del, &guider_ui.screen_img_del, setup_scr_screen_time, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
+            break;
+        }
+        case LV_DIR_RIGHT:
+        {
+            lv_indev_wait_release(lv_indev_get_act());
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_voice, guider_ui.screen_voice_del, &guider_ui.screen_img_del, setup_scr_screen_voice, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
+            break;
+        }
+        default:
+            break;
+        }
+        break;
+    }
+    case LV_EVENT_KEY:
+    {
+        uint8_t key = *(uint8_t *)e->param;
+        switch(key) {
+        case 1: // 左键
+        {
+            lv_indev_wait_release(lv_indev_get_act());
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_time, guider_ui.screen_time_del, &guider_ui.screen_img_del, setup_scr_screen_time, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
+            break;
+        }
+        case 2: // 右键
+        {
+            lv_indev_wait_release(lv_indev_get_act());
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_voice, guider_ui.screen_voice_del, &guider_ui.screen_img_del, setup_scr_screen_voice, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
+            break;
+        }   
+        default:
+            break;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
 
+void events_init_screen_img (lv_ui *ui)
+{
+    lv_obj_add_event_cb(ui->screen_img, screen_img_event_handler, LV_EVENT_ALL, ui);
+}
 
 void events_init(lv_ui *ui)
 {

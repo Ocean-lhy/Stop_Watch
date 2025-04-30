@@ -74,10 +74,10 @@ void setup_scr_screen_info(lv_ui *ui)
 
     //Write codes screen_info_label_current
     ui->screen_info_label_current = lv_label_create(ui->screen_info);
-    lv_label_set_text(ui->screen_info_label_current, "");
+    lv_label_set_text(ui->screen_info_label_current, "current: 0mA");
     lv_label_set_long_mode(ui->screen_info_label_current, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(ui->screen_info_label_current, 173, 333);
-    lv_obj_set_size(ui->screen_info_label_current, 121, 18);
+    lv_obj_set_pos(ui->screen_info_label_current, 133, 333);
+    lv_obj_set_size(ui->screen_info_label_current, 203, 18);
 
     //Write style for screen_info_label_current, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
     lv_obj_set_style_border_width(ui->screen_info_label_current, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
@@ -143,10 +143,10 @@ void setup_scr_screen_info(lv_ui *ui)
 
     //Write codes screen_info_label_charge
     ui->screen_info_label_charge = lv_label_create(ui->screen_info);
-    lv_label_set_text(ui->screen_info_label_charge, "");
+    lv_label_set_text(ui->screen_info_label_charge, "bat charging");
     lv_label_set_long_mode(ui->screen_info_label_charge, LV_LABEL_LONG_WRAP);
-    lv_obj_set_pos(ui->screen_info_label_charge, 173, 304);
-    lv_obj_set_size(ui->screen_info_label_charge, 121, 18);
+    lv_obj_set_pos(ui->screen_info_label_charge, 141, 304);
+    lv_obj_set_size(ui->screen_info_label_charge, 194, 18);
 
     //Write style for screen_info_label_charge, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
     lv_obj_set_style_border_width(ui->screen_info_label_charge, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
