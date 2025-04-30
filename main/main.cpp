@@ -222,10 +222,6 @@ void app_main(void)
             printf("i2c_addr[%d] = 0x%02x\n", i, i2c_addr[i]);
         }
     }
-    
-    // RX8130
-    ESP_LOGI(TAG, "RX8130 init");
-    rx8130_init(i2c_bus);
 
     // 初始化各个驱动
     ESP_LOGI(TAG, "motor_init");
@@ -233,6 +229,25 @@ void app_main(void)
     ESP_LOGI(TAG, "pi4io_init");
     pi4io_init(i2c_bus);
     pi4io_5V_out_disable();
+
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    // 触摸
+    ESP_LOGI(TAG, "cst9217_init");
+    cst9217_init(i2c_bus);
+
+
+    // 创建时间同步任务
+    // time_sync_task();
+    // xTaskCreate(update_time, "update_time", 4096, NULL, 5, NULL);
+    
+    // LCD
+    ESP_LOGI(TAG, "lcd_init");
+    lcd_init();
+    
+    // RX8130
+    ESP_LOGI(TAG, "RX8130 init");
+    rx8130_init(i2c_bus);
     
     // 充电管理
     ESP_LOGI(TAG, "aw32001_init");
@@ -253,26 +268,13 @@ void app_main(void)
     // ES8311 音频
     ESP_LOGI(TAG, "es8311_driver_init");
     es8311_driver_init(i2c_bus);
-
-    // 触摸
-    ESP_LOGI(TAG, "cst9217_init");
-    cst9217_init(i2c_bus);
-
-
-    // 创建时间同步任务
-    // time_sync_task();
-    // xTaskCreate(update_time, "update_time", 4096, NULL, 5, NULL);
-    
-    // LCD
-    ESP_LOGI(TAG, "lcd_init");
-    lcd_init();
     
     uint8_t brightness = 0xFF;
     ESP_LOGI(TAG, "Start main loop");
     while (1)
     {
         // 定期更新状态
-        if (esp_timer_get_time() - last_update_time > 1000 * 1000)
+        if (esp_timer_get_time() - last_update_time > 500 * 1000)
         {
             last_update_time = esp_timer_get_time();
             
@@ -548,8 +550,28 @@ void update_screen_data(void)
                             angle += 360;
                         }
                         ESP_LOGI(TAG, "angle = %d", angle);
-                        // 设置图片旋转角度
-                        lv_img_set_angle(guider_ui.screen_img_img, angle * 10); // LVGL中角度需要乘以10
+                        
+                        // 获取当前角度
+                        int16_t current_angle = lv_img_get_angle(guider_ui.screen_img_img_1) / 10;
+                        
+                        // 计算最短路径
+                        int16_t diff = angle - current_angle;
+                        if(diff > 180) {
+                            diff -= 360;
+                        } else if(diff < -180) {
+                            diff += 360;
+                        }
+                        int16_t target_angle = current_angle + diff;
+                        
+                        // 设置图片旋转动画
+                        lv_anim_t a;
+                        lv_anim_init(&a);
+                        lv_anim_set_var(&a, guider_ui.screen_img_img_1);
+                        lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_img_set_angle);
+                        lv_anim_set_values(&a, current_angle * 10, target_angle * 10);
+                        lv_anim_set_time(&a, 500);
+                        lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+                        lv_anim_start(&a);
                     }
                     update_data = false;
                 }

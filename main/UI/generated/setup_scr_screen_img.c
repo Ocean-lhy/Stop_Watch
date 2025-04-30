@@ -45,7 +45,7 @@ void setup_scr_screen_img(lv_ui *ui)
     ui->screen_img_img_1 = lv_img_create(ui->screen_img);
     lv_obj_add_flag(ui->screen_img_img_1, LV_OBJ_FLAG_CLICKABLE);
     lv_img_set_src(ui->screen_img_img_1, &_raianglemodified_alpha_50x20);
-    lv_img_set_pivot(ui->screen_img_img_1, 25,10);
+    lv_img_set_pivot(ui->screen_img_img_1, 25,223);
     lv_img_set_angle(ui->screen_img_img_1, 0);
     lv_obj_set_pos(ui->screen_img_img_1, 208, 10);
     lv_obj_set_size(ui->screen_img_img_1, 50, 20);
@@ -60,10 +60,11 @@ void setup_scr_screen_img(lv_ui *ui)
     ui->screen_img_img_2 = lv_img_create(ui->screen_img);
     lv_obj_add_flag(ui->screen_img_img_2, LV_OBJ_FLAG_CLICKABLE);
     lv_img_set_src(ui->screen_img_img_2, &_raianglemodified_alpha_50x20);
-    lv_img_set_pivot(ui->screen_img_img_2, 25,10);
+    lv_img_set_pivot(ui->screen_img_img_2, 23,10);
     lv_img_set_angle(ui->screen_img_img_2, 1800);
     lv_obj_set_pos(ui->screen_img_img_2, 208, 436);
     lv_obj_set_size(ui->screen_img_img_2, 50, 20);
+    lv_obj_add_flag(ui->screen_img_img_2, LV_OBJ_FLAG_HIDDEN);
 
     //Write style for screen_img_img_2, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
     lv_obj_set_style_img_recolor_opa(ui->screen_img_img_2, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
@@ -79,6 +80,7 @@ void setup_scr_screen_img(lv_ui *ui)
     lv_img_set_angle(ui->screen_img_img_3, 2700);
     lv_obj_set_pos(ui->screen_img_img_3, -5, 223);
     lv_obj_set_size(ui->screen_img_img_3, 50, 20);
+    lv_obj_add_flag(ui->screen_img_img_3, LV_OBJ_FLAG_HIDDEN);
 
     //Write style for screen_img_img_3, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
     lv_obj_set_style_img_recolor_opa(ui->screen_img_img_3, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
@@ -94,6 +96,7 @@ void setup_scr_screen_img(lv_ui *ui)
     lv_img_set_angle(ui->screen_img_img_4, 900);
     lv_obj_set_pos(ui->screen_img_img_4, 423, 223);
     lv_obj_set_size(ui->screen_img_img_4, 50, 20);
+    lv_obj_add_flag(ui->screen_img_img_4, LV_OBJ_FLAG_HIDDEN);
 
     //Write style for screen_img_img_4, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
     lv_obj_set_style_img_recolor_opa(ui->screen_img_img_4, 0, LV_PART_MAIN|LV_STATE_DEFAULT);

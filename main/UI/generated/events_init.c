@@ -88,8 +88,8 @@ static void screen_time_event_handler (lv_event_t *e)
         case LV_DIR_RIGHT:
         {
             lv_indev_wait_release(lv_indev_get_act());
-            ui_load_scr_animation(&guider_ui, &guider_ui.screen_voice, guider_ui.screen_voice_del, &guider_ui.screen_time_del, setup_scr_screen_voice, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
-            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_time_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
+            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_voice, guider_ui.screen_voice_del, &guider_ui.screen_time_del, setup_scr_screen_voice, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_time_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
             break;
         }
         default:
@@ -110,8 +110,8 @@ static void screen_time_event_handler (lv_event_t *e)
         case 2: // 右键
         {
             lv_indev_wait_release(lv_indev_get_act());
-            ui_load_scr_animation(&guider_ui, &guider_ui.screen_voice, guider_ui.screen_voice_del, &guider_ui.screen_time_del, setup_scr_screen_voice, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
-            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_time_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
+            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_voice, guider_ui.screen_voice_del, &guider_ui.screen_time_del, setup_scr_screen_voice, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_time_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
             break;
         }
         default:
@@ -294,8 +294,8 @@ static void screen_voice_event_handler (lv_event_t *e)
         case LV_DIR_LEFT:
         {
             lv_indev_wait_release(lv_indev_get_act());
-            ui_load_scr_animation(&guider_ui, &guider_ui.screen_time, guider_ui.screen_time_del, &guider_ui.screen_voice_del, setup_scr_screen_time, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
-            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_voice_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
+            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_time, guider_ui.screen_time_del, &guider_ui.screen_voice_del, setup_scr_screen_time, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_voice_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
             break;
         }
         case LV_DIR_RIGHT:
@@ -316,8 +316,8 @@ static void screen_voice_event_handler (lv_event_t *e)
         case 1: // 左键
         {
             lv_indev_wait_release(lv_indev_get_act());
-            ui_load_scr_animation(&guider_ui, &guider_ui.screen_time, guider_ui.screen_time_del, &guider_ui.screen_voice_del, setup_scr_screen_time, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
-            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_voice_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
+            // ui_load_scr_animation(&guider_ui, &guider_ui.screen_time, guider_ui.screen_time_del, &guider_ui.screen_voice_del, setup_scr_screen_time, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
+            ui_load_scr_animation(&guider_ui, &guider_ui.screen_img, guider_ui.screen_img_del, &guider_ui.screen_voice_del, setup_scr_screen_img, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false, true);
             break;
         }
         case 2: // 右键
