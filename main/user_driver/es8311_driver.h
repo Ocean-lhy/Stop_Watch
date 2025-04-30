@@ -22,6 +22,12 @@ void es8311_driver_init(i2c_bus_handle_t i2c_bus);
 // 录音和播放任务
 void record_and_play_task(void *arg);
 
+void start_recording(void);
+void play_recording(void);
+void stop_recording(void);
+void stop_playing(void);
+extern bool is_recording;
+extern bool is_playing;
 // 播放标志
 extern uint8_t play_flag;
 

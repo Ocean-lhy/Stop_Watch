@@ -18,42 +18,12 @@ extern "C" {
 
 void events_init(lv_ui *ui);
 
-void events_init_home_analog(lv_ui *ui);
-void events_init_home_digital(lv_ui *ui);
-void events_init_message_info(lv_ui *ui);
-void events_init_message_list(lv_ui *ui);
-void events_init_standup(lv_ui *ui);
-void events_init_car_lock(lv_ui *ui);
-void events_init_car_start(lv_ui *ui);
-void events_init_listening(lv_ui *ui);
-void events_init_not_recognized(lv_ui *ui);
-void events_init_recognized(lv_ui *ui);
-void events_init_contact_list(lv_ui *ui);
-void events_init_call(lv_ui *ui);
-void events_init_weather(lv_ui *ui);
-void events_init_weather_hour(lv_ui *ui);
-void events_init_weather_week(lv_ui *ui);
-void events_init_air_quality(lv_ui *ui);
-void events_init_fitness(lv_ui *ui);
-void events_init_music_player(lv_ui *ui);
-void events_init_flight(lv_ui *ui);
-void events_init_flight_info(lv_ui *ui);
-void events_init_navigation(lv_ui *ui);
-void events_init_position(lv_ui *ui);
-void events_init_payment(lv_ui *ui);
-void events_init_payment_info(lv_ui *ui);
-void events_init_settings(lv_ui *ui);
-void events_init_battery(lv_ui *ui);
-void events_init_info(lv_ui *ui);
-void events_init_find_device(lv_ui *ui);
-void events_init_play_sound(lv_ui *ui);
-void events_init_blood_oxygen(lv_ui *ui);
-void events_init_ekg(lv_ui *ui);
-void events_init_stress_level(lv_ui *ui);
-void events_init_blood_pressure(lv_ui *ui);
-void events_init_sleep(lv_ui *ui);
-void events_init_step(lv_ui *ui);
-void events_init_menstrual(lv_ui *ui);
+void events_init_screen_logo(lv_ui *ui);
+void events_init_screen_time(lv_ui *ui);
+void events_init_screen_info(lv_ui *ui);
+void events_init_screen_vibra(lv_ui *ui);
+void events_init_screen_voice(lv_ui *ui);
+void events_init_screen_img(lv_ui *ui);
 
 #ifdef __cplusplus
 }

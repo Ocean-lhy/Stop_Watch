@@ -12,6 +12,7 @@ extern "C"
 #include "esp_timer.h"
 #include "i2c_bus.h"
 #include "esp_sleep.h"
+#include "esp_littlefs.h"
 
 // 导入模块化的驱动
 #include "system_utils.h"
@@ -24,23 +25,131 @@ extern "C"
 #include "cst9217_driver.h"
 #include "lcd_driver.h"
 #include "rx8130ce.h"
+#include "time_utils.h"
 
 #include "gui_guider.h"
 #include "custom.h"
 
 #define TAG "main"
 
+#define WIFI_SSID "ocean"
+#define WIFI_PASSWORD "oceanocean"
+
 // extern const uint8_t test_pcm_start[] asm("_binary_test_pcm_start");
 // extern const uint8_t test_pcm_end[]   asm("_binary_test_pcm_end");
 
-extern uint8_t play_flag;
-    
 lv_ui guider_ui;
 i2c_bus_handle_t i2c_bus = NULL;
-static uint64_t last_blink_time = 0;
-static bool led_blink = false;
+static uint64_t last_update_time = 0;
 
+uint8_t battery_level = 50; // 0-100
+uint16_t current = 500;
+float voltage = 4.2;
+int accel_x = 0;
+int accel_y = 0;
+int accel_z = 0;
+int gyro_x = 0;
+int gyro_y = 0;
+int gyro_z = 0;
+uint8_t charge_status = 0;
+
+// 录音和播放标志
+extern bool is_recording;
+extern bool is_playing;
+uint32_t recording_start_time = 0;
+
+// 当前界面类型
+typedef enum {
+    SCREEN_LOGO = 0,
+    SCREEN_TIME,
+    SCREEN_INFO,
+    SCREEN_VIBRA,
+    SCREEN_VOICE,
+    SCREEN_IMG,
+    SCREEN_UNKNOWN
+} screen_type_t;
+
+screen_type_t current_screen = SCREEN_UNKNOWN;
+static bool update_data = false;
+// 函数声明
 void sleep_mode(uint8_t sleep_mode);
+void update_screen_data(void);
+screen_type_t get_current_screen(void);
+
+// 时间同步任务函数
+void time_sync_task()
+{
+    // 初始化时间模块
+    time_utils_init();
+    
+    // 连接WiFi
+    esp_err_t ret = time_utils_connect_wifi(WIFI_SSID, WIFI_PASSWORD);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "连接WiFi失败，无法同步时间");
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // 同步网络时间
+    ret = time_utils_sync_ntp();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "同步网络时间失败");
+        time_utils_disconnect_wifi();
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // 校准RTC时间
+    ret = time_utils_calibrate_rtc();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "校准RTC时间失败");
+    }
+    
+    // 断开WiFi
+    time_utils_disconnect_wifi();
+    
+    // 获取当前时间并打印
+    rx8130_datetime_t current_time;
+    if (time_utils_get_time(&current_time) == ESP_OK) {
+        ESP_LOGI(TAG, "当前RTC时间: %02d/%02d/%02d %02d:%02d:%02d 星期%d",
+                 current_time.year, current_time.month, current_time.date,
+                 current_time.hour, current_time.minute, current_time.second,
+                 current_time.day);
+    }
+    
+    // 任务完成，删除自身
+    // vTaskDelete(NULL);
+}
+
+void update_time(void *pvParameters)
+{
+    time_utils_time_t current_time_ms;
+    while (1)
+    {
+        if (time_utils_get_time_ms(&current_time_ms) == ESP_OK)
+        {
+            // screen_ccw_digital_clock_s_hour_value = current_time_ms.datetime.hour;
+            // screen_ccw_digital_clock_s_min_value = current_time_ms.datetime.minute;
+            // screen_ccw_digital_clock_s_sec_value = current_time_ms.datetime.second;
+            // screen_ccw_digital_clock_s_ms_value = current_time_ms.milliseconds;
+            // screen_clock_digital_clock_s_hour_value = current_time_ms.datetime.hour;
+            // screen_clock_digital_clock_s_min_value = current_time_ms.datetime.minute;
+            // screen_clock_digital_clock_s_sec_value = current_time_ms.datetime.second;
+            // screen_clock_s_year = current_time_ms.datetime.year + 2000;
+            // screen_clock_s_month = current_time_ms.datetime.month;
+            // screen_clock_s_day = current_time_ms.datetime.date;
+            // if (current_time_ms.datetime.hour < 12)
+            // {
+            //     strcpy(screen_clock_digital_clock_s_meridiem, "AM");
+            // }
+            // else
+            // {
+            //     strcpy(screen_clock_digital_clock_s_meridiem, "PM");
+            // }
+        }
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+}
 
 void app_main(void)
 {
@@ -50,8 +159,37 @@ void app_main(void)
 
     // 初始化NVS存储
     nvs_init();
-    vTaskDelay(3000 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
     printf("app main start\r\n");
+
+    // 初始化 LittleFS
+    esp_vfs_littlefs_conf_t vfs_conf = {
+        .base_path = "/littlefs",
+        .partition_label = "graphics",
+        .format_if_mount_failed = true,
+        .dont_mount = false,
+    };
+
+    esp_err_t ret = esp_vfs_littlefs_register(&vfs_conf);
+    if (ret != ESP_OK) {
+        if (ret == ESP_FAIL) {
+            ESP_LOGE(TAG, "Failed to mount or format filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(TAG, "Failed to find LittleFS partition");
+        } else {
+            ESP_LOGE(TAG, "Failed to initialize LittleFS (%s)", esp_err_to_name(ret));
+        }
+        return;
+    }
+
+    size_t total = 0, used = 0;
+    ret = esp_littlefs_info(vfs_conf.partition_label, &total, &used);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get LittleFS partition information (%s)", esp_err_to_name(ret));
+    } else {
+        ESP_LOGI(TAG, "Mounted LittleFS partition");
+        ESP_LOGI(TAG, "Total: %d, Used: %d", total, used);
+    }
 
     // 打印芯片信息
     print_chip_info();
@@ -84,10 +222,6 @@ void app_main(void)
             printf("i2c_addr[%d] = 0x%02x\n", i, i2c_addr[i]);
         }
     }
-    
-    // RX8130
-    ESP_LOGI(TAG, "RX8130 init");
-    rx8130_init(i2c_bus);
 
     // 初始化各个驱动
     ESP_LOGI(TAG, "motor_init");
@@ -95,6 +229,25 @@ void app_main(void)
     ESP_LOGI(TAG, "pi4io_init");
     pi4io_init(i2c_bus);
     pi4io_5V_out_disable();
+
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    // 触摸
+    ESP_LOGI(TAG, "cst9217_init");
+    cst9217_init(i2c_bus);
+
+
+    // 创建时间同步任务
+    // time_sync_task();
+    // xTaskCreate(update_time, "update_time", 4096, NULL, 5, NULL);
+    
+    // LCD
+    ESP_LOGI(TAG, "lcd_init");
+    lcd_init();
+    
+    // RX8130
+    ESP_LOGI(TAG, "RX8130 init");
+    rx8130_init(i2c_bus);
     
     // 充电管理
     ESP_LOGI(TAG, "aw32001_init");
@@ -115,97 +268,66 @@ void app_main(void)
     // ES8311 音频
     ESP_LOGI(TAG, "es8311_driver_init");
     es8311_driver_init(i2c_bus);
-
-    // 触摸
-    ESP_LOGI(TAG, "cst9217_init");
-    cst9217_init(i2c_bus);
-
-    // LCD
-    ESP_LOGI(TAG, "lcd_init");
-    lcd_init();
-
-    // bool timer_triggered = false;
-    // rx8130_is_timer_triggered(&timer_triggered);
-    // if (timer_triggered) {
-    //     ESP_LOGI(TAG, "定时器已经触发");
-    //     rx8130_clear_timer_flag();
-    // }
-    // else
-    // {
-    //     ESP_LOGI(TAG, "定时器未触发");
-    //     rx8130_set_shutdown_timer_mode(30);
-    //     power_off();
-    // }
-    // rx8130_enable_timer(true);
-
-    // sleep_mode(2);
-
-    // 设置G3-G8 G11为输出
-    gpio_config_t io_conf = {};
-    io_conf.intr_type = GPIO_INTR_DISABLE;    // 禁用中断
-    io_conf.mode = GPIO_MODE_OUTPUT;           // 设置为输出模式
-    io_conf.pin_bit_mask = ((1ULL<<3) | (1ULL<<4) | (1ULL<<5) | (1ULL<<6) | (1ULL<<7) | (1ULL<<8) | (1ULL<<11)); // G3-G7
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    gpio_config(&io_conf);
-
-    // 设置输出
-    gpio_set_level(GPIO_NUM_3, 0);
-    gpio_set_level(GPIO_NUM_4, 0); 
-    gpio_set_level(GPIO_NUM_5, 0);
-    gpio_set_level(GPIO_NUM_6, 0);
-    gpio_set_level(GPIO_NUM_7, 0);
-    gpio_set_level(GPIO_NUM_8, 0);
-    gpio_set_level(GPIO_NUM_11, 0);
     
     uint8_t brightness = 0xFF;
     ESP_LOGI(TAG, "Start main loop");
     while (1)
     {
         // 定期更新状态
-        if (esp_timer_get_time() - last_blink_time > 3000000)
+        if (esp_timer_get_time() - last_update_time > 500 * 1000)
         {
-            last_blink_time = esp_timer_get_time();
-            led_blink = !led_blink;
+            last_update_time = esp_timer_get_time();
             
             // 更新状态信息
-            aw32001_check_status();
-            bmi270_dev_update();
-            bq27220_read_voltage();
-            bq27220_read_current();
-            uint8_t vin_det = pi4io_vin_detect();
-            printf("vin_det = %d\n", vin_det);
-            printf("\r\n");
+            charge_status = aw32001_check_status();
 
-            vTaskDelay(100 / portTICK_PERIOD_MS);
+            // 更新电池信息
+            voltage = bq27220_read_voltage() / 1000.0f;
+            current = bq27220_read_current();
+            // 计算电池电量百分比
+            battery_level = bq27220_get_soc(); // 获取电池容量百分比
+            
+            // 更新加速度计和陀螺仪数据
+            bmi270_dev_update();
+            bmi270_get_data(&accel_x, &accel_y, &accel_z, &gyro_x, &gyro_y, &gyro_z);
+            
+            uint8_t vin_det = pi4io_vin_detect();
+            // printf("vin_det = %d\n", vin_det);
+            // printf("\r\n");
+
+            update_data = true;
+            // vTaskDelay(100 / portTICK_PERIOD_MS);
         }
+        
 
         // 按键处理
         if (btn1)
         {
-            printf("btn1 pressed\n");
-            play_flag = (play_flag!=0)?0:1;
-            printf("test enable = %d\n", play_flag);
             btn1 = 0;
-            brightness += 10;
-            lcd_set_brightness(brightness);
-            lcd_set_sleep(play_flag);
-            // power_off();
+            printf("btn1 pressed\n");
+            if (example_lvgl_lock(-1))
+            {
+                uint8_t key = 2;
+                lv_obj_t *current = lv_scr_act();
+                lv_event_send(current, LV_EVENT_KEY, &key);
+                example_lvgl_unlock();
+            }
         } 
         if (btn2)
         {
             printf("btn2 pressed\n");
             
-            size_t bytes_written = 0;
-            printf("start play\n");
-            // i2s_write(I2S_NUM_0, test_pcm_start, test_pcm_end - test_pcm_start, &bytes_written, portMAX_DELAY);
-            // i2s_zero_dma_buffer(I2S_NUM_0);
-            printf("end play\n");
             btn2 = 0;
-
-            brightness -= 10;
-            lcd_set_brightness(brightness);
+            if (example_lvgl_lock(-1))
+            {
+                uint8_t key = 1;
+                lv_obj_t *current = lv_scr_act();
+                lv_event_send(current, LV_EVENT_KEY, &key);
+                example_lvgl_unlock();
+            }
         }
+
+        update_screen_data();
 
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
@@ -238,6 +360,226 @@ void sleep_mode(uint8_t sleep_mode) // 0: wake up, 1: light sleep, 2: deep sleep
     while (1)
     {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+}
+
+// 获取当前屏幕
+screen_type_t get_current_screen(void)
+{
+    lv_obj_t *current_scr = lv_scr_act();
+    
+    if (current_scr == guider_ui.screen_logo) {
+        return SCREEN_LOGO;
+    } else if (current_scr == guider_ui.screen_time) {
+        return SCREEN_TIME;
+    } else if (current_scr == guider_ui.screen_info) {
+        return SCREEN_INFO;
+    } else if (current_scr == guider_ui.screen_vibra) {
+        return SCREEN_VIBRA;
+    } else if (current_scr == guider_ui.screen_voice) {
+        return SCREEN_VOICE;
+    } else if (current_scr == guider_ui.screen_img) {
+        return SCREEN_IMG;
+    }
+    
+    return SCREEN_UNKNOWN;
+}
+
+// 更新屏幕数据
+void update_screen_data(void)
+{
+    static char battery_level_buffer[32];
+    static char current_buffer[32];
+    static char accel_buffer[32];
+    static char gyro_buffer[32];
+    static char touch_buffer[32];
+    static char charge_buffer[32];
+    static char record_time_buffer[32];
+    current_screen = get_current_screen();
+    if (example_lvgl_lock(20))
+    {
+        switch (current_screen) {
+            case SCREEN_LOGO:
+                // Logo 界面通常不需要更新数据
+                break;
+                
+            case SCREEN_TIME:
+                // 更新时间相关数据
+                // 时间日期信息
+                {
+                    if (update_data)
+                    {
+                        if (lv_obj_is_valid(guider_ui.screen_time_label_battery) && guider_ui.screen_time_label_battery != NULL) 
+                        {
+                            sprintf(battery_level_buffer, "%d%% %.1fV", battery_level, voltage);
+                            lv_label_set_text_static(guider_ui.screen_time_label_battery, battery_level_buffer);
+                        }
+                        if (lv_obj_is_valid(guider_ui.screen_time_bar_battery) && guider_ui.screen_time_bar_battery != NULL)
+                        {
+                            lv_bar_set_value(guider_ui.screen_time_bar_battery, battery_level, LV_ANIM_OFF);
+                        }
+                        update_data = false;
+                    }
+                }
+                break;
+                
+            case SCREEN_INFO:
+                // 更新信息页面的数据
+                // 电池信息
+                if (update_data)
+                {
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_battery) && guider_ui.screen_info_label_battery!= NULL) 
+                    {
+                        sprintf(battery_level_buffer, "%d%% %.1fV", battery_level, voltage);
+                        lv_label_set_text_static(guider_ui.screen_info_label_battery, battery_level_buffer);
+                    }
+                    if (lv_obj_is_valid(guider_ui.screen_info_bar_battery) && guider_ui.screen_info_bar_battery != NULL)
+                    {
+                        lv_bar_set_value(guider_ui.screen_info_bar_battery, battery_level, LV_ANIM_OFF);
+                    }
+                    
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_current) && guider_ui.screen_info_label_current != NULL) 
+                    {
+                        sprintf(current_buffer, "current reg: %d", current);
+                        lv_label_set_text_static(guider_ui.screen_info_label_current, current_buffer);
+                    }
+
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_charge) && guider_ui.screen_info_label_charge != NULL) 
+                    {
+                        if (charge_status == 0)
+                        {
+                            strcpy(charge_buffer, "bat not charging");
+                        }
+                        else if (charge_status == 1)
+                        {
+                            strcpy(charge_buffer, "bat charging done");
+                        }
+                        else if (charge_status == 2)
+                        {
+                            strcpy(charge_buffer, "bat charging");
+                        }
+                        else if (charge_status == 3)
+                        {
+                            strcpy(charge_buffer, "bat pre charging");
+                        }
+                        lv_label_set_text_static(guider_ui.screen_info_label_charge, charge_buffer);
+                    }
+                    
+                    // 更新IMU数据
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_accel) && guider_ui.screen_info_label_accel != NULL) 
+                    {
+                        sprintf(accel_buffer, "Accel: X:%d, Y:%d, Z:%d", accel_x, accel_y, accel_z);
+                        lv_label_set_text_static(guider_ui.screen_info_label_accel, accel_buffer);
+                    }
+                    
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_gyro) && guider_ui.screen_info_label_gyro != NULL) 
+                    {
+                        sprintf(gyro_buffer, "Gyro: X:%d, Y:%d, Z:%d", gyro_x, gyro_y, gyro_z);
+                        lv_label_set_text_static(guider_ui.screen_info_label_gyro, gyro_buffer);
+                    }
+                    update_data = false;
+                }
+
+                if (tp_info[0].switch_ != 0x00)
+                {
+                    if (lv_obj_is_valid(guider_ui.screen_info_label_touc) && guider_ui.screen_info_label_touc != NULL) 
+                    {
+                        sprintf(touch_buffer, "Touch: %d, %d", tp_info[0].x, tp_info[0].y);
+                        lv_label_set_text_static(guider_ui.screen_info_label_touc, touch_buffer);
+                    }
+                }
+                break;
+                
+            case SCREEN_VIBRA:
+                if (update_data)
+                {
+                    if (lv_obj_is_valid(guider_ui.screen_vibra_label_battery) && guider_ui.screen_vibra_label_battery != NULL) 
+                    {
+                        sprintf(battery_level_buffer, "%d%% %.1fV", battery_level, voltage);
+                        lv_label_set_text_static(guider_ui.screen_vibra_label_battery, battery_level_buffer);
+                    }
+                    if (lv_obj_is_valid(guider_ui.screen_vibra_bar_battery) && guider_ui.screen_vibra_bar_battery != NULL)
+                    {
+                        lv_bar_set_value(guider_ui.screen_vibra_bar_battery, battery_level, LV_ANIM_OFF);
+                    }
+                    update_data = false;
+                }
+                break;
+                
+            case SCREEN_VOICE:
+                if (update_data)
+                {
+                    if (lv_obj_is_valid(guider_ui.screen_voice_label_battery) && guider_ui.screen_voice_label_battery != NULL) 
+                    {
+                        sprintf(battery_level_buffer, "%d%% %.1fV", battery_level, voltage);
+                        lv_label_set_text_static(guider_ui.screen_voice_label_battery, battery_level_buffer);
+                    }
+                    if (lv_obj_is_valid(guider_ui.screen_voice_bar_battery) && guider_ui.screen_voice_bar_battery != NULL)
+                    {
+                        lv_bar_set_value(guider_ui.screen_voice_bar_battery, battery_level, LV_ANIM_OFF);
+                    }
+                    update_data = false;
+                }
+                if (is_recording || is_playing)
+                {
+                    if (recording_start_time == 0)
+                    {
+                        recording_start_time = esp_timer_get_time();
+                    }
+                    if (lv_obj_is_valid(guider_ui.screen_voice_label_record) && guider_ui.screen_voice_label_record != NULL) 
+                    {
+                        float recording_time = (esp_timer_get_time() - recording_start_time) / 1000000.0f;
+                        sprintf(record_time_buffer, "%.1fs", recording_time);
+                        lv_label_set_text_static(guider_ui.screen_voice_label_record, record_time_buffer);
+                    }
+                }
+                else
+                {
+                    recording_start_time = 0;
+                }
+                break;
+            case SCREEN_IMG:
+                if (update_data)
+                {
+                    // 根据BMI270的旋转角度旋转图片
+                    if (lv_obj_is_valid(guider_ui.screen_img_img) && guider_ui.screen_img_img != NULL) {
+                        // 使用陀螺仪数据计算旋转角度
+                        int16_t angle = (int16_t)(atan2(accel_y, accel_x) * 180.0 / M_PI);
+                        // 确保角度在0-360度范围内
+                        if(angle < 0) {
+                            angle += 360;
+                        }
+                        ESP_LOGI(TAG, "angle = %d", angle);
+                        
+                        // 获取当前角度
+                        int16_t current_angle = lv_img_get_angle(guider_ui.screen_img_img_1) / 10;
+                        
+                        // 计算最短路径
+                        int16_t diff = angle - current_angle;
+                        if(diff > 180) {
+                            diff -= 360;
+                        } else if(diff < -180) {
+                            diff += 360;
+                        }
+                        int16_t target_angle = current_angle + diff;
+                        
+                        // 设置图片旋转动画
+                        lv_anim_t a;
+                        lv_anim_init(&a);
+                        lv_anim_set_var(&a, guider_ui.screen_img_img_1);
+                        lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_img_set_angle);
+                        lv_anim_set_values(&a, current_angle * 10, target_angle * 10);
+                        lv_anim_set_time(&a, 500);
+                        lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+                        lv_anim_start(&a);
+                    }
+                    update_data = false;
+                }
+                break;
+            default:
+                break;
+        }
+        example_lvgl_unlock();
     }
 }
 

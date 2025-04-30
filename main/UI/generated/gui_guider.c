@@ -75,50 +75,20 @@ void ui_animation(void * var, int32_t duration, int32_t delay, int32_t start_val
 void init_scr_del_flag(lv_ui *ui)
 {
 
-    ui->home_analog_del = true;
-    ui->home_digital_del = true;
-    ui->message_info_del = true;
-    ui->message_list_del = true;
-    ui->standup_del = true;
-    ui->car_lock_del = true;
-    ui->car_start_del = true;
-    ui->listening_del = true;
-    ui->not_recognized_del = true;
-    ui->recognized_del = true;
-    ui->contact_list_del = true;
-    ui->call_del = true;
-    ui->weather_del = true;
-    ui->weather_hour_del = true;
-    ui->weather_week_del = true;
-    ui->air_quality_del = true;
-    ui->fitness_del = true;
-    ui->music_player_del = true;
-    ui->flight_del = true;
-    ui->flight_info_del = true;
-    ui->navigation_del = true;
-    ui->position_del = true;
-    ui->payment_del = true;
-    ui->payment_info_del = true;
-    ui->settings_del = true;
-    ui->battery_del = true;
-    ui->info_del = true;
-    ui->find_device_del = true;
-    ui->play_sound_del = true;
-    ui->blood_oxygen_del = true;
-    ui->ekg_del = true;
-    ui->stress_level_del = true;
-    ui->blood_pressure_del = true;
-    ui->sleep_del = true;
-    ui->step_del = true;
-    ui->menstrual_del = true;
+    ui->screen_logo_del = true;
+    ui->screen_time_del = true;
+    ui->screen_info_del = true;
+    ui->screen_vibra_del = true;
+    ui->screen_voice_del = true;
+    ui->screen_img_del = true;
 }
 
 void setup_ui(lv_ui *ui)
 {
     init_scr_del_flag(ui);
     init_keyboard(ui);
-    setup_scr_home_analog(ui);
-    lv_scr_load(ui->home_analog);
+    setup_scr_screen_logo(ui);
+    lv_scr_load(ui->screen_logo);
 }
 
 void init_keyboard(lv_ui *ui)

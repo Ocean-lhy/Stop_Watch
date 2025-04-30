@@ -354,6 +354,12 @@ void lv_analogclock_set_time(lv_obj_t * obj, int32_t hour, int32_t min, int32_t 
     lv_analogclock_set_indicator_value(obj, analogclock->sec_indic, sec);
 }
 
+void lv_analogclock_set_mirco_seconds(lv_obj_t * obj, int32_t ms)
+{
+    lv_analogclock_t * analogclock = (lv_analogclock_t *)obj;
+    lv_analogclock_set_indicator_value(obj, analogclock->sec_indic, ms);
+}
+
 /**********************
  *   STATIC FUNCTIONS
  **********************/

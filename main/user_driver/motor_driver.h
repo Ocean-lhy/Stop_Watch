@@ -25,4 +25,11 @@ void motor_stop();
 // 按钮震动 中断中调用
 esp_err_t button_vibrate(void);
 
+void set_vibrate_cmd(uint8_t intensity, uint32_t duration_ms, uint32_t interval_ms);
+
+// 获取电机振动命令
+void get_vibrate_cmd(uint8_t *intensity, uint32_t *duration_ms, uint32_t *interval_ms);
+
+
+
 #endif // MOTOR_DRIVER_H

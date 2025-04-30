@@ -45,6 +45,9 @@ idf_component_register(
         esp_lcd_touch 
         esp_lcd_co5300 
         esp_lcd_touch_cst9217
+        esp_wifi
     # EMBED_TXTFILES "test.pcm"
 )
+
+target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_LVGL_H_INCLUDE_SIMPLE=1)
 

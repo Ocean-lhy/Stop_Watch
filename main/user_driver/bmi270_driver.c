@@ -126,11 +126,11 @@ void bmi270_dev_init(i2c_bus_handle_t i2c_bus)
     pin_config.pin_cfg[0].output_en = BMI2_INT_OUTPUT_ENABLE;
     pin_config.int_latch = BMI2_INT_LATCH;
 
-    bmi2_set_int_pin_config(&pin_config, &aux_bmi2_dev);
     /* Map data ready interrupt to interrupt pin. */
     // bmi2_map_data_int(BMI2_DRDY_INT, BMI2_INT1, &aux_bmi2_dev);
 
-    bmi270_map_feat_int(&sens_int, 1, &aux_bmi2_dev);
+    // bmi2_set_int_pin_config(&pin_config, &aux_bmi2_dev);
+    // bmi270_map_feat_int(&sens_int, 1, &aux_bmi2_dev);
 
 }
 
@@ -153,6 +153,16 @@ void bmi270_dev_update()
     ESP_LOGI(TAG, "Gyro: x: %d, y: %d, z: %d", bmi_sensor_data.gyr.x, bmi_sensor_data.gyr.y, bmi_sensor_data.gyr.z);
     bmi2_get_int_status(&int_status, &aux_bmi2_dev);
     ESP_LOGI(TAG, "Int status: %d", int_status);
+}
+
+void bmi270_get_data(int *ax, int *ay, int *az, int *gx, int *gy, int *gz)
+{
+    if (ax) *ax = bmi_sensor_data.acc.x;
+    if (ay) *ay = bmi_sensor_data.acc.y;
+    if (az) *az = bmi_sensor_data.acc.z;
+    if (gx) *gx = bmi_sensor_data.gyr.x;
+    if (gy) *gy = bmi_sensor_data.gyr.y;
+    if (gz) *gz = bmi_sensor_data.gyr.z;
 }
 
 void bmi270_dev_sleep()
