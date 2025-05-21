@@ -106,7 +106,18 @@ void app_main(void)
 
     // LCD
     ESP_LOGI(TAG, "lcd_init");
-    // lcd_init();
+    lcd_init();
+
+    // cst820
+    ESP_LOGI(TAG, "cst820_init");
+    i2c_bus_device_handle_t cst820_dev = i2c_bus_device_create(i2c_bus, 0x15, 400000);
+    if (cst820_dev == NULL)
+    {
+        ESP_LOGE(TAG, "cst820_dev create failed");
+    }
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    uint8_t i2c_buf[1] = {0x03};
+    i2c_bus_write_reg(cst820_dev, 0xE5, 1, i2c_buf, 1); // 进入休眠
 
     // bool timer_triggered = false;
     // rx8130_is_timer_triggered(&timer_triggered);
@@ -126,7 +137,7 @@ void app_main(void)
     gpio_config_t io_conf = {};
     io_conf.intr_type = GPIO_INTR_DISABLE;    // 禁用中断
     io_conf.mode = GPIO_MODE_OUTPUT;           // 设置为输出模式
-    io_conf.pin_bit_mask = ((1ULL<<1) | (1ULL<<2) | (1ULL<<21) | (1ULL<<39));
+    io_conf.pin_bit_mask = ((1ULL<<1) | (1ULL<<2) | (1ULL<<21) | (1ULL<<39) | (1ULL<<11));
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
     gpio_config(&io_conf);
@@ -135,6 +146,7 @@ void app_main(void)
     gpio_set_level(GPIO_NUM_2, 1);
     gpio_set_level(GPIO_NUM_21, 1);
     gpio_set_level(GPIO_NUM_39, 1);
+    gpio_set_level(GPIO_NUM_11, 1);
 
     // gpio_config_t input_io_conf = {};
     // input_io_conf.intr_type = GPIO_INTR_DISABLE;
@@ -175,6 +187,7 @@ void sleep_mode(uint8_t sleep_mode) // 0: wake up, 1: light sleep, 2: deep sleep
     {
         // bq27220_enter_sleep_mode();
         // bmi270_dev_sleep();
+        lcd_set_sleep(true);
         vTaskDelay(1000 / portTICK_PERIOD_MS);
         esp_deep_sleep_start();
     }

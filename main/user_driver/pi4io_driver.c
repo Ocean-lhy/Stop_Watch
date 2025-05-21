@@ -37,9 +37,9 @@ void pi4io_init(i2c_bus_handle_t i2c_bus)
     vTaskDelay(10 / portTICK_PERIOD_MS);
     i2c_bus_read_byte(pi4io_dev, PI4IO_REG_CHIP_RESET, &in_data);
     vTaskDelay(10 / portTICK_PERIOD_MS);
-    i2c_bus_write_byte(pi4io_dev, PI4IO_REG_IO_DIR, 0b11010011); // 0: input 1: output
+    i2c_bus_write_byte(pi4io_dev, PI4IO_REG_IO_DIR, 0b11110011); // 0: input 1: output
     vTaskDelay(10 / portTICK_PERIOD_MS);
-    i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_H_IM, 0b00001100); // 使用到的引脚关闭High-Impedance
+    i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_H_IM, 0b11011111); // 使用到的引脚关闭High-Impedance
     vTaskDelay(10 / portTICK_PERIOD_MS);
     i2c_bus_write_byte(pi4io_dev, PI4IO_REG_PULL_SEL, 0b00000000); // pull up/down select, 0 down, 1 up
     vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -49,7 +49,7 @@ void pi4io_init(i2c_bus_handle_t i2c_bus)
     vTaskDelay(10 / portTICK_PERIOD_MS);
     i2c_bus_write_byte(pi4io_dev, PI4IO_REG_INT_MASK, 0b11111111); // P0 P1 中断使能 0 enable, 1 disable
     vTaskDelay(10 / portTICK_PERIOD_MS);
-    i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, 0b11010011); // 默认输出为0
+    i2c_bus_write_byte(pi4io_dev, PI4IO_REG_OUT_SET, 0b00100000); // 默认输出为0
     vTaskDelay(10 / portTICK_PERIOD_MS);
 }
 
