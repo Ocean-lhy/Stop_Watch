@@ -21,6 +21,8 @@ uint8_t btn1 = 0;
 uint8_t btn2 = 0;
 volatile bool touch_irq_flag = false;
 static int32_t restart_counter = 0;
+extern SemaphoreHandle_t touch_mux;
+
 
 void print_chip_info()
 {

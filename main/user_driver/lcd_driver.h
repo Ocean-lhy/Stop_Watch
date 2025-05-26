@@ -6,7 +6,6 @@
 #include "esp_lcd_panel_vendor.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_co5300.h"
-#include "esp_lcd_touch_cst9217.h"
 #include "lvgl.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -52,9 +51,6 @@ void lcd_init();
 
 // LVGL刷新回调
 bool example_notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx);
-
-// 触摸中断回调
-void example_touch_isr_cb(esp_lcd_touch_handle_t tp);
 
 // LVGL显示回调
 void example_lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map);

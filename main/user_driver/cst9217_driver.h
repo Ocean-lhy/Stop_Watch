@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "i2c_bus.h"
+#include "system_utils.h"
 
 // CST9217设备地址
 #define CST9217_ADDR 0x5A
@@ -34,11 +35,10 @@ typedef struct tp_info {
 
 // 外部变量声明
 extern tp_info_t tp_info[MAX_POINTS_REPORT];
-extern SemaphoreHandle_t touch_mux;
 extern volatile bool touch_irq_flag;
 
 // 初始化CST9217
-void cst9217_init(i2c_bus_handle_t i2c_bus);
+int cst9217_init(i2c_bus_handle_t i2c_bus);
 
 // 更新触摸点信息
 int cst9217_update();
@@ -50,7 +50,7 @@ void cst9217_enter_bootloader();
 void cst9217_read_chip_id();
 
 // 读取触摸屏信息
-void cst9217_read_tpinfo();
+int cst9217_read_tpinfo();
 
 // 设置工作模式
 void cst9217_set_workmode(enum work_mode mode, uint8_t enable);
