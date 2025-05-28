@@ -77,10 +77,10 @@ void example_lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
     /* 从触摸控制器读取数据 */
     if (tp_pressed)
     {
-        data->point.x = EXAMPLE_LCD_H_RES - lv_touch_data.x;
-        data->point.y = EXAMPLE_LCD_V_RES - lv_touch_data.y;
+        data->point.x = lv_touch_data.x;
+        data->point.y = lv_touch_data.y;
         data->state = LV_INDEV_STATE_PRESSED;
-        // ESP_LOGI(TAG, "Touch position: %d,%d, %d", data->point.x, data->point.y, lv_touch_data.status);
+        ESP_LOGI(TAG, "Touch position: %d,%d, %d", data->point.x, data->point.y, lv_touch_data.status);
     }
 }
 
@@ -136,7 +136,7 @@ void lcd_init()
                                                                 QSPI_D1_PIN,
                                                                 QSPI_D2_PIN,
                                                                 QSPI_D3_PIN,
-                                                                EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES * LCD_BIT_PER_PIXEL / 8);
+                                                                4096);
     ESP_ERROR_CHECK(spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
     ESP_LOGI(TAG, "Install panel IO");
@@ -171,12 +171,12 @@ void lcd_init()
     size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     ESP_LOGI(TAG, "PSRAM size: %d bytes, free: %d bytes", psram_size, psram_free);
     // 分配 LVGL 使用的绘制缓冲区, 建议选择绘制缓冲区的大小至少为屏幕大小的 1/10
-    lv_color_t *buf1 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * 160, MALLOC_CAP_SPIRAM);
+    lv_color_t *buf1 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES, MALLOC_CAP_SPIRAM);
     assert(buf1);
-    lv_color_t *buf2 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * 160, MALLOC_CAP_SPIRAM);
+    lv_color_t *buf2 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES, MALLOC_CAP_SPIRAM);
     assert(buf2);
     // 初始化 LVGL 绘制缓冲区
-    lv_disp_draw_buf_init(&disp_buf, buf1, buf2, EXAMPLE_LCD_H_RES * 160);
+    lv_disp_draw_buf_init(&disp_buf, buf1, buf2, EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES);
 
     ESP_LOGI(TAG, "Register display driver to LVGL");
     lv_disp_drv_init(&disp_drv);
