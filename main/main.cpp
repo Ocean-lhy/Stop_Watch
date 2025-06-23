@@ -22,7 +22,7 @@ extern "C"
 #include "bq27220_driver.h"
 #include "bmi270_driver.h"
 #include "es8311_driver.h"
-#include "cst9217_driver.h"
+#include "touch_driver.h"
 #include "lcd_driver.h"
 #include "rx8130ce.h"
 #include "time_utils.h"
@@ -57,6 +57,9 @@ uint8_t charge_status = 0;
 extern bool is_recording;
 extern bool is_playing;
 uint32_t recording_start_time = 0;
+
+SemaphoreHandle_t touch_mux = NULL;
+extern touch_point_t lv_touch_data;
 
 // 当前界面类型
 typedef enum {
@@ -233,8 +236,8 @@ void app_main(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
     // 触摸
-    ESP_LOGI(TAG, "cst9217_init");
-    cst9217_init(i2c_bus);
+    ESP_LOGI(TAG, "touch init");
+    touch_driver_init(i2c_bus);
 
 
     // 创建时间同步任务
@@ -339,7 +342,7 @@ void sleep_mode(uint8_t sleep_mode) // 0: wake up, 1: light sleep, 2: deep sleep
     if (sleep_mode == 0)
     {
         lcd_set_sleep(false);
-        cst9217_set_workmode(LP_MODE, 1);
+        touch_driver_wakeup();
     }
     else 
     if (sleep_mode == 1)
@@ -347,7 +350,7 @@ void sleep_mode(uint8_t sleep_mode) // 0: wake up, 1: light sleep, 2: deep sleep
         bq27220_enter_sleep_mode();
         bmi270_dev_sleep();
         lcd_set_sleep(true);
-        cst9217_set_workmode(NOMAL_MODE, 1);
+        touch_driver_sleep();
         esp_light_sleep_start();
     }
     else 
@@ -480,11 +483,11 @@ void update_screen_data(void)
                     update_data = false;
                 }
 
-                if (tp_info[0].switch_ != 0x00)
+                if (lv_touch_data.status == TOUCH_STATUS_PRESSED)
                 {
                     if (lv_obj_is_valid(guider_ui.screen_info_label_touc) && guider_ui.screen_info_label_touc != NULL) 
                     {
-                        sprintf(touch_buffer, "Touch: %d, %d", tp_info[0].x, tp_info[0].y);
+                        sprintf(touch_buffer, "Touch: %d, %d", lv_touch_data.x, lv_touch_data.y);
                         lv_label_set_text_static(guider_ui.screen_info_label_touc, touch_buffer);
                     }
                 }

@@ -2,7 +2,6 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "system_utils.h"
 
 static const char *TAG = "cst9217_driver";
 static i2c_bus_device_handle_t cst9217_dev = NULL;
@@ -10,10 +9,15 @@ static uint32_t partno_chip_type; // 芯片类型
 static uint32_t module_id; // 模块ID
 static uint8_t work_mode; // 工作模式
 tp_info_t tp_info[MAX_POINTS_REPORT];
-SemaphoreHandle_t touch_mux = NULL;
+extern SemaphoreHandle_t touch_mux;
 
-void cst9217_init(i2c_bus_handle_t i2c_bus)
+int cst9217_init(i2c_bus_handle_t i2c_bus)
 {
+    if (touch_mux == NULL)
+    {
+        touch_mux = xSemaphoreCreateBinary();
+        assert(touch_mux);
+    }
     cst9217_dev = i2c_bus_device_create(i2c_bus, CST9217_ADDR, 400000);
     if (cst9217_dev == NULL)
     {
@@ -25,9 +29,12 @@ void cst9217_init(i2c_bus_handle_t i2c_bus)
     }
     // cst9217_read_chip_id();
 
-    cst9217_read_tpinfo();
-    touch_mux = xSemaphoreCreateBinary();
-    assert(touch_mux);
+    if (cst9217_read_tpinfo() != 0)
+    {
+        ESP_LOGE(TAG, "cst9217 init failed");
+        return -1;
+    }
+    return 0;
 }
 
 int cst9217_update()
@@ -136,7 +143,7 @@ void cst9217_read_chip_id()
     vTaskDelay(100 / portTICK_PERIOD_MS);
 }
 
-void cst9217_read_tpinfo()
+int cst9217_read_tpinfo()
 {
     uint8_t i2c_buf[30] = {0};
 
@@ -154,8 +161,15 @@ void cst9217_read_tpinfo()
     ESP_LOGI(TAG, "res_x: %d", i2c_buf[5] << 8 | i2c_buf[4]);
     ESP_LOGI(TAG, "res_y: %d", i2c_buf[7] << 8 | i2c_buf[6]);
     ESP_LOGI(TAG, "fw_checksum: 0x%04x", i2c_buf[27] << 8 | i2c_buf[26]);
+
+    if ((i2c_buf[27] << 8 | i2c_buf[26]) == 0x0000)
+    {
+        ESP_LOGE(TAG, "cst9217_read_tpinfo failed");
+        return -1;
+    }
     
     cst9217_set_workmode(NOMAL_MODE, 1);
+    return 0;
 }
 
 void cst9217_set_workmode(enum work_mode mode, uint8_t enable)
@@ -242,8 +256,3 @@ void cst9217_read_word_from_mem(uint8_t type, uint16_t addr, uint32_t *value)
     i2c_bus_read_reg(cst9217_dev, 0xA018, 2, i2c_buf, 4);
     *value = (i2c_buf[0] << 24) | (i2c_buf[1] << 16) | (i2c_buf[2] << 8) | i2c_buf[3];
 }
-
-void cst9217_read_data(uint8_t *data, uint16_t len)
-{
-    // 空实现，根据需要补充
-} 

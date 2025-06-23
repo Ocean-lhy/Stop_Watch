@@ -2,36 +2,28 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "cst9217_driver.h"
+#include "touch_driver.h"
 #include "driver/spi_master.h"
 #include "gui_guider.h"
 #include "esp_timer.h"
 #include "esp_lcd_panel_commands.h"
+#include "lv_demos.h"
 static const char *TAG = "lcd_driver";
 
 lv_disp_draw_buf_t disp_buf; // 包含称为绘制缓冲区的内部图形缓冲区
 lv_disp_drv_t disp_drv;      // 包含回调函数
 SemaphoreHandle_t lvgl_mux = NULL;
 static esp_lcd_panel_handle_t panel_handle = NULL;
-static esp_lcd_touch_handle_t tp = NULL;
 static esp_lcd_panel_io_handle_t io_handle = NULL;
 extern lv_ui guider_ui;
+extern SemaphoreHandle_t touch_mux;
+touch_point_t lv_touch_data;
 
 bool example_notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
 {
     lv_disp_drv_t *disp_driver = (lv_disp_drv_t *)user_ctx;
     lv_disp_flush_ready(disp_driver);
     return false;
-}
-
-void example_touch_isr_cb(esp_lcd_touch_handle_t tp)
-{
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    xSemaphoreGiveFromISR(touch_mux, &xHigherPriorityTaskWoken);
-
-    if (xHigherPriorityTaskWoken) {
-        portYIELD_FROM_ISR();
-    }
 }
 
 void example_lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
@@ -55,41 +47,7 @@ void example_lvgl_rounder_cb(struct _lv_disp_drv_t *disp_drv, lv_area_t *area)
 void example_lvgl_update_cb(lv_disp_drv_t *drv)
 {
     esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t) drv->user_data;
-
-    switch (drv->rotated) {
-    case LV_DISP_ROT_NONE:
-        // 旋转液晶显示屏
-        esp_lcd_panel_swap_xy(panel_handle, false);
-        esp_lcd_panel_mirror(panel_handle, true, false);
-        // 旋转液晶触摸
-        esp_lcd_touch_set_mirror_y(tp, false);
-        esp_lcd_touch_set_mirror_x(tp, false);
-        break;
-    case LV_DISP_ROT_90:
-        // 旋转液晶显示屏
-        esp_lcd_panel_swap_xy(panel_handle, true);
-        esp_lcd_panel_mirror(panel_handle, true, true);
-        // 旋转液晶触摸
-        esp_lcd_touch_set_mirror_y(tp, false);
-        esp_lcd_touch_set_mirror_x(tp, false);
-        break;
-    case LV_DISP_ROT_180:
-        // 旋转液晶显示屏
-        esp_lcd_panel_swap_xy(panel_handle, false);
-        esp_lcd_panel_mirror(panel_handle, false, true);
-        // 旋转液晶触摸
-        esp_lcd_touch_set_mirror_y(tp, false);
-        esp_lcd_touch_set_mirror_x(tp, false);
-        break;
-    case LV_DISP_ROT_270:
-        // 旋转液晶显示屏
-        esp_lcd_panel_swap_xy(panel_handle, true);
-        esp_lcd_panel_mirror(panel_handle, false, false);
-        // 旋转液晶触摸
-        esp_lcd_touch_set_mirror_y(tp, false);
-        esp_lcd_touch_set_mirror_x(tp, false);
-        break;
-    }
+    // TODO:
 }
 
 void example_increase_lvgl_tick(void *arg)
@@ -109,8 +67,9 @@ void example_lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
     }
     if (xSemaphoreTake(touch_mux, portMAX_DELAY) == pdTRUE)
     {
-        cst9217_update();
-        tp_pressed = tp_info[0].switch_ != 0x00 ? true : false;
+        touch_driver_update();
+        touch_driver_get_point(&lv_touch_data.x, &lv_touch_data.y, &lv_touch_data.status);
+        tp_pressed = (lv_touch_data.status != TOUCH_STATUS_RELEASED ? true : false);
         touch_irq_flag = 0;
         xSemaphoreGive(touch_mux);
     }
@@ -118,10 +77,10 @@ void example_lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
     /* 从触摸控制器读取数据 */
     if (tp_pressed)
     {
-        data->point.x = EXAMPLE_LCD_H_RES - tp_info[0].x;
-        data->point.y = EXAMPLE_LCD_V_RES - tp_info[0].y;
+        data->point.x = lv_touch_data.x;
+        data->point.y = lv_touch_data.y;
         data->state = LV_INDEV_STATE_PRESSED;
-        // ESP_LOGI(TAG, "Touch position: %d,%d", data->point.x, data->point.y);
+        ESP_LOGI(TAG, "Touch position: %d,%d, %d", data->point.x, data->point.y, lv_touch_data.status);
     }
 }
 
@@ -177,7 +136,7 @@ void lcd_init()
                                                                 QSPI_D1_PIN,
                                                                 QSPI_D2_PIN,
                                                                 QSPI_D3_PIN,
-                                                                EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES * LCD_BIT_PER_PIXEL / 8);
+                                                                4096);
     ESP_ERROR_CHECK(spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
     ESP_LOGI(TAG, "Install panel IO");
@@ -212,12 +171,12 @@ void lcd_init()
     size_t psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     ESP_LOGI(TAG, "PSRAM size: %d bytes, free: %d bytes", psram_size, psram_free);
     // 分配 LVGL 使用的绘制缓冲区, 建议选择绘制缓冲区的大小至少为屏幕大小的 1/10
-    lv_color_t *buf1 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * 160, MALLOC_CAP_SPIRAM);
+    lv_color_t *buf1 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES, MALLOC_CAP_SPIRAM);
     assert(buf1);
-    lv_color_t *buf2 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * 160, MALLOC_CAP_SPIRAM);
+    lv_color_t *buf2 = (lv_color_t *)heap_caps_malloc(EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES, MALLOC_CAP_SPIRAM);
     assert(buf2);
     // 初始化 LVGL 绘制缓冲区
-    lv_disp_draw_buf_init(&disp_buf, buf1, buf2, EXAMPLE_LCD_H_RES * 160);
+    lv_disp_draw_buf_init(&disp_buf, buf1, buf2, EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES);
 
     ESP_LOGI(TAG, "Register display driver to LVGL");
     lv_disp_drv_init(&disp_drv);
