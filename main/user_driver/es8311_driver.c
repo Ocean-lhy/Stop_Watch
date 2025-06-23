@@ -19,11 +19,23 @@ bool is_recording = false;
 bool is_playing = false;
 bool is_loop_test = false;
 
+// WAV播放相关变量
+bool is_wav_playing_flag = false;
+wav_type_t current_wav_type = WAV_VOICE_START;
+TaskHandle_t wav_play_task_handle = NULL;
+
 #define RECORD_FILE "/littlefs/record.pcm"
 #define RECORD_BUFFER_SIZE (1024 * 4)
+#define WAV_PLAY_BUFFER_SIZE (1024 * 2)
 
-extern const uint8_t test_pcm_start[] asm("_binary_test_pcm_start");
-extern const uint8_t test_pcm_end[]   asm("_binary_test_pcm_end");
+extern const uint8_t voice_start_start[] asm("_binary_voice_start_wav_start");
+extern const uint8_t voice_start_end[] asm("_binary_voice_start_wav_end");
+
+extern const uint8_t voice_button_start[] asm("_binary_voice_button_wav_start");
+extern const uint8_t voice_button_end[] asm("_binary_voice_button_wav_end");
+
+extern const uint8_t voice_touch_start[] asm("_binary_voice_touch_wav_start");
+extern const uint8_t voice_touch_end[] asm("_binary_voice_touch_wav_end");
 
 void es8311_driver_init(i2c_bus_handle_t i2c_bus)
 {
@@ -77,13 +89,16 @@ void es8311_driver_init(i2c_bus_handle_t i2c_bus)
     es8311_codec_ctrl_state(AUDIO_HAL_CODEC_MODE_BOTH, AUDIO_HAL_CTRL_START);
     es8311_set_mic_gain(ES8311_MIC_GAIN_0DB);
     // 0xC0: -96 dB, 0x64: -50 dB, 0x00: 0 dB
-    es8311_codec_set_voice_volume(0xBD);
+    es8311_codec_set_voice_volume(0x88);
     
     es8311_read_all();
 
     es8311_test(0);
     
-    xTaskCreate(record_and_play_task, "record_and_play_task", 1024 * 8, NULL, (configMAX_PRIORITIES - 1), NULL);
+    // 创建WAV播放任务
+    xTaskCreate(wav_play_task, "wav_play_task", 1024 * 6, NULL, (configMAX_PRIORITIES - 2), &wav_play_task_handle);
+    
+    // xTaskCreate(record_and_play_task, "record_and_play_task", 1024 * 8, NULL, (configMAX_PRIORITIES - 1), NULL);
 }
 
 void send_event(uint8_t key)
@@ -199,6 +214,9 @@ void record_and_play_task(void *arg)
                 }
                 
                 ESP_LOGI(TAG, "开始播放");
+                
+                // 启用PA功放用于录音播放
+                pi4io_speaker_enable();
             }
             
             while (is_playing) 
@@ -220,6 +238,8 @@ void record_and_play_task(void *arg)
                         fclose(file);
                         file = NULL;
                         is_playing = false;
+                        // 播放完成时关闭PA功放
+                        pi4io_speaker_disable();
                         send_event(4);
                     } 
                     else 
@@ -229,6 +249,8 @@ void record_and_play_task(void *arg)
                         fclose(file);
                         file = NULL;
                         is_playing = false;
+                        // 播放停止时关闭PA功放
+                        pi4io_speaker_disable();
                         send_event(4);
                         ESP_LOGI(TAG, "播放已停止");
                     } 
@@ -245,6 +267,8 @@ void record_and_play_task(void *arg)
                 fclose(file);
                 file = NULL;
                 ESP_LOGI(TAG, "播放已停止");
+                // 播放停止时关闭PA功放
+                pi4io_speaker_disable();
                 send_event(4);
             }
         } 
@@ -292,4 +316,168 @@ void stop_recording(void)
 void stop_playing(void)
 {
     is_playing = false;
+    pi4io_speaker_disable();
+}
+
+// WAV播放控制函数
+void play_wav_file(wav_type_t wav_type)
+{
+    if (is_wav_playing_flag) {
+        ESP_LOGI(TAG, "WAV文件正在播放中，请稍后再试");
+        return;
+    }
+    
+    current_wav_type = wav_type;
+    is_wav_playing_flag = true;
+    ESP_LOGI(TAG, "开始播放WAV文件，类型: %d", wav_type);
+    
+    // 通知播放任务开始播放
+    if (wav_play_task_handle != NULL) {
+        xTaskNotifyGive(wav_play_task_handle);
+    }
+}
+
+// ISR安全的WAV播放函数（不包含日志输出）
+void play_wav_file_from_isr(wav_type_t wav_type)
+{
+    if (is_wav_playing_flag) {
+        return;  // 正在播放中，直接返回
+    }
+    
+    current_wav_type = wav_type;
+    is_wav_playing_flag = true;
+    
+    // 从ISR通知播放任务开始播放
+    if (wav_play_task_handle != NULL) {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        vTaskNotifyGiveFromISR(wav_play_task_handle, &xHigherPriorityTaskWoken);
+        if (xHigherPriorityTaskWoken) {
+            portYIELD_FROM_ISR();
+        }
+    }
+}
+
+void stop_wav_playing(void)
+{
+    is_wav_playing_flag = false;
+    pi4io_speaker_disable();
+    ESP_LOGI(TAG, "停止WAV播放");
+    
+    // 通知播放任务停止播放
+    if (wav_play_task_handle != NULL) {
+        xTaskNotifyGive(wav_play_task_handle);
+    }
+}
+
+bool is_wav_playing(void)
+{
+    return is_wav_playing_flag;
+}
+
+// WAV文件播放任务
+void wav_play_task(void *arg)
+{
+    uint8_t *play_buffer = NULL;
+    size_t bytes_written;
+    const uint8_t *wav_data_start = NULL;
+    const uint8_t *wav_data_end = NULL;
+    size_t wav_data_size = 0;
+    size_t current_pos = 0;
+    
+    // 分配播放缓冲区
+    play_buffer = (uint8_t *)malloc(WAV_PLAY_BUFFER_SIZE);
+    if (play_buffer == NULL) {
+        ESP_LOGE(TAG, "无法分配WAV播放缓冲区");
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    ESP_LOGI(TAG, "WAV播放任务已启动");
+    
+    // 调试信息：显示各WAV文件的地址和大小
+    ESP_LOGI(TAG, "voice_start: %p - %p (%d bytes)", voice_start_start, voice_start_end, 
+             (int)(voice_start_end - voice_start_start));
+    ESP_LOGI(TAG, "voice_button: %p - %p (%d bytes)", voice_button_start, voice_button_end, 
+             (int)(voice_button_end - voice_button_start));
+    ESP_LOGI(TAG, "voice_touch: %p - %p (%d bytes)", voice_touch_start, voice_touch_end, 
+             (int)(voice_touch_end - voice_touch_start));
+    
+    pi4io_speaker_disable();
+    
+    while (1) {
+        // 阻塞等待播放通知
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        
+        if (is_wav_playing_flag) {
+            // 根据WAV类型选择数据源
+            switch (current_wav_type) {
+                case WAV_VOICE_START:
+                    wav_data_start = voice_start_start;
+                    wav_data_end = voice_start_end;
+                    break;
+                case WAV_VOICE_BUTTON:
+                    wav_data_start = voice_button_start;
+                    wav_data_end = voice_button_end;
+                    break;
+                case WAV_VOICE_TOUCH:
+                    wav_data_start = voice_touch_start;
+                    wav_data_end = voice_touch_end;
+                    break;
+                default:
+                    ESP_LOGE(TAG, "未知的WAV文件类型: %d", current_wav_type);
+                    is_wav_playing_flag = false;
+                    pi4io_speaker_disable();
+                    continue;
+            }
+            
+            wav_data_size = wav_data_end - wav_data_start;
+            current_pos = 0;
+            
+            // 跳过WAV文件头(通常是44字节)
+            if (wav_data_size > 44) {
+                current_pos = 44;
+            }
+            
+            ESP_LOGI(TAG, "开始播放WAV文件类型: %d，大小: %d bytes", current_wav_type, wav_data_size);
+            
+            pi4io_speaker_enable();
+            
+            // 播放WAV数据
+            while (is_wav_playing_flag && current_pos < wav_data_size) {
+                size_t chunk_size = (wav_data_size - current_pos > WAV_PLAY_BUFFER_SIZE) ? 
+                                   WAV_PLAY_BUFFER_SIZE : (wav_data_size - current_pos);
+                
+                // 复制数据到播放缓冲区
+                memcpy(play_buffer, wav_data_start + current_pos, chunk_size);
+                
+                // 通过I2S输出音频数据
+                if (i2s_write(I2S_NUM_0, play_buffer, chunk_size, &bytes_written, 
+                             portMAX_DELAY) != ESP_OK) {
+                    ESP_LOGE(TAG, "I2S写入失败");
+                    pi4io_speaker_disable();
+                    break;
+                }
+                
+                current_pos += bytes_written;
+                
+                // 短暂延时，避免过快消耗CPU
+                vTaskDelay(1 / portTICK_PERIOD_MS);
+            }
+            
+            // 播放完成
+            is_wav_playing_flag = false;
+            ESP_LOGI(TAG, "WAV文件播放完成");
+            
+            pi4io_speaker_disable();
+            
+            // 发送播放完成事件
+            send_event(5);
+        }
+    }
+    
+    // 清理资源
+    if (play_buffer != NULL) {
+        free(play_buffer);
+    }
+    vTaskDelete(NULL);
 }

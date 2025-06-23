@@ -110,5 +110,5 @@ void setup_scr_screen_img(lv_ui *ui)
     //Update current screen layout.
     lv_obj_update_layout(ui->screen_img);
 
-    events_init_screen_img(ui);
+    // events_init_screen_img(ui);
 }

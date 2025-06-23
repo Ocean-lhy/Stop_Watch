@@ -15,6 +15,8 @@
 #include "bq27220_driver.h"
 #include "cst9217_driver.h"
 #include "motor_driver.h"
+#include "es8311_driver.h"
+
 static const char *TAG = "system_utils";
 
 uint8_t btn1 = 0;
@@ -75,6 +77,7 @@ void IRAM_ATTR global_irq_handler(void *arg)
 {
     if ((uint32_t)arg == TP_INT_IRQ_PIN)
     {
+        play_wav_file_from_isr(WAV_VOICE_TOUCH);
         touch_irq_flag = true;
         if (touch_mux == NULL)
         {
@@ -91,13 +94,15 @@ void IRAM_ATTR global_irq_handler(void *arg)
     if ((uint32_t)arg == USER_BUTTON1_PIN)
     {
         btn1 = 1;
+        play_wav_file_from_isr(WAV_VOICE_BUTTON);
     }
     else 
     if ((uint32_t)arg == USER_BUTTON2_PIN)
     {
         btn2 = 1;
+        play_wav_file_from_isr(WAV_VOICE_BUTTON);
     }
-    button_vibrate();
+    // button_vibrate();
 }
 
 void enter_light_sleep_mode()

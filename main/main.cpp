@@ -201,8 +201,6 @@ void app_main(void)
     touch_mux = xSemaphoreCreateBinary();
     assert(touch_mux);
 
-    // 初始化全局中断
-    global_irq_init();
     
     // 初始化I2C总线
     i2c_config_t conf;
@@ -247,6 +245,8 @@ void app_main(void)
     // LCD
     ESP_LOGI(TAG, "lcd_init");
     lcd_init();
+
+    lcd_set_brightness(180);
     
     // RX8130
     ESP_LOGI(TAG, "RX8130 init");
@@ -271,8 +271,11 @@ void app_main(void)
     // ES8311 音频
     ESP_LOGI(TAG, "es8311_driver_init");
     es8311_driver_init(i2c_bus);
+    play_wav_file(WAV_VOICE_START);
+
+    // 初始化全局中断
+    global_irq_init();
     
-    uint8_t brightness = 0xFF;
     ESP_LOGI(TAG, "Start main loop");
     while (1)
     {

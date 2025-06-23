@@ -45,7 +45,7 @@ idf_component_register(
         esp_lcd_touch 
         esp_lcd_co5300 
         esp_wifi
-    # EMBED_TXTFILES "test.pcm"
+    EMBED_FILES "voice_start.wav" "voice_button.wav" "voice_touch.wav"
 )
 
 target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_LVGL_H_INCLUDE_SIMPLE=1)

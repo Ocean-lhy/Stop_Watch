@@ -8,6 +8,9 @@
 #include "esp_timer.h"
 #include "esp_lcd_panel_commands.h"
 #include "lv_demos.h"
+
+#include "es8311_driver.h"
+
 static const char *TAG = "lcd_driver";
 
 lv_disp_draw_buf_t disp_buf; // 包含称为绘制缓冲区的内部图形缓冲区
@@ -80,7 +83,7 @@ void example_lvgl_touch_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
         data->point.x = lv_touch_data.x;
         data->point.y = lv_touch_data.y;
         data->state = LV_INDEV_STATE_PRESSED;
-        ESP_LOGI(TAG, "Touch position: %d,%d, %d", data->point.x, data->point.y, lv_touch_data.status);
+        // ESP_LOGI(TAG, "Touch position: %d,%d, %d", data->point.x, data->point.y, lv_touch_data.status);
     }
 }
 
