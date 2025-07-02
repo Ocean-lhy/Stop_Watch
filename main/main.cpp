@@ -74,6 +74,13 @@ typedef enum {
 
 screen_type_t current_screen = SCREEN_UNKNOWN;
 static bool update_data = false;
+
+// 长按检测相关变量
+static bool btn1_pressed = false;
+static uint64_t btn1_press_start_time = 0;
+static const uint64_t LONG_PRESS_DURATION = 3000000; // 3秒，单位微秒
+static bool long_press_triggered = false;
+
 // 函数声明
 void sleep_mode(uint8_t sleep_mode);
 void update_screen_data(void);
@@ -201,6 +208,17 @@ void app_main(void)
     touch_mux = xSemaphoreCreateBinary();
     assert(touch_mux);
 
+    // 初始化G11引脚为输出并拉低用来开启I2C总线
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << GPIO_NUM_11),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+    gpio_set_level(GPIO_NUM_11, 0);
+
     // 初始化全局中断
     global_irq_init();
     
@@ -229,9 +247,9 @@ void app_main(void)
     // 初始化各个驱动
     ESP_LOGI(TAG, "motor_init");
     motor_init();
-    ESP_LOGI(TAG, "pi4io_init");
-    pi4io_init(i2c_bus);
-    pi4io_5V_out_disable();
+    // ESP_LOGI(TAG, "pi4io_init");
+    // pi4io_init(i2c_bus);
+    // pi4io_5V_out_disable();
 
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
@@ -294,26 +312,63 @@ void app_main(void)
             bmi270_dev_update();
             bmi270_get_data(&accel_x, &accel_y, &accel_z, &gyro_x, &gyro_y, &gyro_z);
             
-            uint8_t vin_det = pi4io_vin_detect();
-            // printf("vin_det = %d\n", vin_det);
-            // printf("\r\n");
+            // uint8_t vin_det = pi4io_vin_detect();
+            // printf("vin_det = %d\r\n", vin_det);
 
             update_data = true;
             // vTaskDelay(100 / portTICK_PERIOD_MS);
         }
         
 
-        // 按键处理
-        if (btn1)
+        // 按键处理（带长按检测）
+        if (gpio_get_level(USER_BUTTON1_PIN) == 0)
         {
-            btn1 = 0;
-            printf("btn1 pressed\n");
-            if (example_lvgl_lock(-1))
+            if (!btn1_pressed)
             {
-                uint8_t key = 2;
-                lv_obj_t *current = lv_scr_act();
-                lv_event_send(current, LV_EVENT_KEY, &key);
-                example_lvgl_unlock();
+                // 按键刚被按下
+                btn1_pressed = true;
+                btn1_press_start_time = esp_timer_get_time();
+                long_press_triggered = false;
+                printf("btn1 pressed, starting long press timer\n");
+            }
+            else
+            {
+                // 按键持续按下，检查是否达到长按时间
+                uint64_t current_time = esp_timer_get_time();
+                if (!long_press_triggered && 
+                    (current_time - btn1_press_start_time) >= LONG_PRESS_DURATION)
+                {
+                    long_press_triggered = true;
+                    printf("btn1 long press detected! Starting BMI270 deep sleep demo...\n");
+                    // 调用BMI270深度睡眠唤醒demo
+                    bmi270_INT_wakeup_deepsleep_test();
+                }
+            }
+        }
+        else
+        {
+            if (btn1_pressed)
+            {
+                // 按键被释放
+                btn1_pressed = false;
+                uint64_t press_duration = esp_timer_get_time() - btn1_press_start_time;
+                
+                if (!long_press_triggered && press_duration < LONG_PRESS_DURATION)
+                {
+                    // 短按处理
+                    printf("btn1 short press (duration: %llu ms)\n", press_duration / 1000);
+                    if (example_lvgl_lock(-1))
+                    {
+                        uint8_t key = 2;
+                        lv_obj_t *current = lv_scr_act();
+                        lv_event_send(current, LV_EVENT_KEY, &key);
+                        example_lvgl_unlock();
+                    }
+                }
+                else if (long_press_triggered)
+                {
+                    printf("btn1 long press completed (duration: %llu ms)\n", press_duration / 1000);
+                }
             }
         } 
         if (btn2)

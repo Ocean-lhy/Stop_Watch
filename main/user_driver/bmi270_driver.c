@@ -1,6 +1,7 @@
 #include "bmi270_driver.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_sleep.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -193,4 +194,100 @@ void bmi270_dev_wakeup()
     bmi2_i2c_write(0x7C, &data, 1, &aux_bmi2_dev);
     vTaskDelay(10 / portTICK_PERIOD_MS);
     bmi270_sensor_enable(sensor_list, 3, &aux_bmi2_dev);
+}
+
+void bmi270_INT_wakeup_deepsleep_test()
+{
+    int8_t rslt;
+    
+    ESP_LOGI(TAG, "配置BMI270 INT2中断唤醒深度睡眠测试");
+    
+    /* 配置INT2引脚 */
+    struct bmi2_int_pin_config int2_pin_cfg = {0};
+    int2_pin_cfg.pin_type = BMI2_INT2;
+    int2_pin_cfg.pin_cfg[1].lvl = BMI2_INT_ACTIVE_HIGH;
+    int2_pin_cfg.pin_cfg[1].od = BMI2_INT_PUSH_PULL;
+    int2_pin_cfg.pin_cfg[1].output_en = BMI2_INT_OUTPUT_ENABLE;
+    int2_pin_cfg.pin_cfg[1].input_en = BMI2_INT_INPUT_DISABLE;
+    int2_pin_cfg.int_latch = BMI2_INT_NON_LATCH;
+    
+    rslt = bmi2_set_int_pin_config(&int2_pin_cfg, &aux_bmi2_dev);
+    if (rslt != BMI2_OK) {
+        ESP_LOGE(TAG, "INT2引脚配置失败: %d", rslt);
+        return;
+    }
+    
+    /* 配置任意运动检测 */
+    struct bmi2_sens_config any_motion_cfg = {0};
+    any_motion_cfg.type = BMI2_ANY_MOTION;
+    
+    /* 获取默认配置 */
+    rslt = bmi270_get_sensor_config(&any_motion_cfg, 1, &aux_bmi2_dev);
+    if (rslt != BMI2_OK) {
+        ESP_LOGE(TAG, "获取任意运动默认配置失败: %d", rslt);
+        return;
+    }
+    
+    /* 设置任意运动检测参数 */
+    any_motion_cfg.cfg.any_motion.threshold = 20;      // 阈值 (约20mg)
+    any_motion_cfg.cfg.any_motion.duration = 5;        // 持续时间 (5 * 20ms = 100ms)
+    any_motion_cfg.cfg.any_motion.select_x = BMI2_ENABLE; // 启用X轴
+    any_motion_cfg.cfg.any_motion.select_y = BMI2_ENABLE; // 启用Y轴
+    any_motion_cfg.cfg.any_motion.select_z = BMI2_ENABLE; // 启用Z轴
+    
+    /* 应用配置 */
+    rslt = bmi270_set_sensor_config(&any_motion_cfg, 1, &aux_bmi2_dev);
+    if (rslt != BMI2_OK) {
+        ESP_LOGE(TAG, "设置任意运动配置失败: %d", rslt);
+        return;
+    }
+    
+    /* 启用传感器 */
+    uint8_t sensor_list_motion[] = {BMI2_ACCEL, BMI2_ANY_MOTION};
+    rslt = bmi270_sensor_enable(sensor_list_motion, 2, &aux_bmi2_dev);
+    if (rslt != BMI2_OK) {
+        ESP_LOGE(TAG, "启用传感器失败: %d", rslt);
+        return;
+    }
+    
+    /* 映射任意运动中断到INT2引脚 */
+    rslt = bmi2_map_feat_int(BMI2_ANY_MOTION, BMI2_INT2, &aux_bmi2_dev);
+    if (rslt != BMI2_OK) {
+        ESP_LOGE(TAG, "映射中断到INT2失败: %d", rslt);
+        return;
+    }
+    
+    ESP_LOGI(TAG, "BMI270 INT2配置完成");
+    ESP_LOGI(TAG, "任意运动检测阈值: %d mg", any_motion_cfg.cfg.any_motion.threshold);
+    ESP_LOGI(TAG, "持续时间: %d ms", any_motion_cfg.cfg.any_motion.duration * 20);
+    ESP_LOGI(TAG, "当设备发生运动时，INT2引脚将产生中断信号");
+    
+    /* 配置ESP32外部唤醒 */
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+    esp_sleep_enable_ext0_wakeup(BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN, 1); // 1 = 高电平触发
+    
+    ESP_LOGI(TAG, "ESP32外部唤醒配置完成");
+    ESP_LOGI(TAG, "唤醒引脚: GPIO%d", BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN);
+    ESP_LOGI(TAG, "触发电平: 高电平");
+    
+    /* 等待一段时间确保配置生效 */
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    bmi2_get_int_status(&int_status, &aux_bmi2_dev);
+    ESP_LOGI(TAG, "INT2状态: %d", int_status);
+    
+    ESP_LOGI(TAG, "请晃动设备以触发任意运动检测");
+    
+    /* 添加延时确保日志输出完成 */
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+    
+    /* 进入深度睡眠 */
+    esp_deep_sleep_start();
 }
