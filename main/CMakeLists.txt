@@ -45,6 +45,7 @@ idf_component_register(
         esp_lcd_touch 
         esp_lcd_co5300 
         esp_lcd_touch_cst9217
+        m5_ic_aw32001
     # EMBED_TXTFILES "test.pcm"
 )
 

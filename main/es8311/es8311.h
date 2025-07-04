@@ -247,7 +247,7 @@ esp_err_t es8311_start(es_module_t mode);
  *     - ESP_OK
  *     - ESP_FAIL
  */
-esp_err_t es8311_stop(es_module_t mode);
+esp_err_t es8311_stop();
 
 /**
  * @brief Get ES8311 DAC mute status

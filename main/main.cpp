@@ -9,6 +9,7 @@ extern "C"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "driver/i2c.h"
+#include "driver/rtc_io.h"
 #include "esp_timer.h"
 #include "i2c_bus.h"
 #include "esp_sleep.h"
@@ -24,6 +25,7 @@ extern "C"
 #include "cst9217_driver.h"
 #include "lcd_driver.h"
 #include "rx8130ce.h"
+#include "m5_ic_aw32001.h"
 
 #include "gui_guider.h"
 #include "custom.h"
@@ -40,13 +42,29 @@ i2c_bus_handle_t i2c_bus = NULL;
 static uint64_t last_blink_time = 0;
 static bool led_blink = false;
 
+m5_ic_aw32001 ic_aw32001(I2C_NUM_0, SYS_I2C_SDA, SYS_I2C_SCL, 400000); // I2C bus 0, SDA pin 21, SCL pin 22, 400kHz
+
 void sleep_mode(uint8_t sleep_mode);
 
 void app_main(void)
 {
-
+    for(int i = 0; i < 47; i++) {
+        int ret = gpio_hold_dis((gpio_num_t)i);
+        ESP_LOGI(TAG, "gpio_hold_dis(%d) = %d", i, ret);
+    }
+    gpio_deep_sleep_hold_dis();
     // 初始化全局中断
     // global_irq_init();
+
+    gpio_config_t io_11 = {
+        .pin_bit_mask = (1ULL << GPIO_NUM_11),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_11);
+    gpio_set_level(GPIO_NUM_11, 0);
     
     // 初始化I2C总线
     i2c_config_t conf;
@@ -82,8 +100,18 @@ void app_main(void)
     
     // 充电管理
     ESP_LOGI(TAG, "aw32001_init");
-    // aw32001_init(i2c_bus);
-    // aw32001_charge_set(true);
+    ic_aw32001.init(AW32001_ADDR);
+    uint8_t reg_data_aw32001 = 0x00;
+    ic_aw32001.read_register(0x01, &reg_data_aw32001);
+    setbit(reg_data_aw32001, 3);
+    ic_aw32001.write_register(0x01, reg_data_aw32001);
+    ic_aw32001.read_register(0x01, &reg_data_aw32001);
+    ESP_LOGI(TAG, "AW32001 CEB: %d", getbit(reg_data_aw32001, 3));
+    ic_aw32001.read_register(0x07, &reg_data_aw32001);
+    setbit(reg_data_aw32001, 7);
+    ic_aw32001.write_register(0x07, reg_data_aw32001);
+    ic_aw32001.read_register(0x07, &reg_data_aw32001);
+    ESP_LOGI(TAG, "AW32001 DIS_PCB_OTP: %d", getbit(reg_data_aw32001, 7));
 
     // 电量计
     ESP_LOGI(TAG, "bq27220_init");
@@ -95,18 +123,25 @@ void app_main(void)
     // IMU
     ESP_LOGI(TAG, "bmi270_dev_init");
     // bmi270_dev_init(i2c_bus);
+    i2c_bus_device_handle_t i2c_dev_handle_bmi270 = i2c_bus_device_create(i2c_bus, 0x68, 400000);
+    if (i2c_dev_handle_bmi270 == NULL)
+    {
+        ESP_LOGE(TAG, "i2c_dev_handle_bmi270 create failed");
+    }
+    uint8_t reg_data[1] = {0x01};
+    i2c_bus_write_reg(i2c_dev_handle_bmi270, 0x7C, 1, reg_data, 1);
+    reg_data[0] = 0x00;
+    i2c_bus_write_reg(i2c_dev_handle_bmi270, 0x7D, 1, reg_data, 1);
 
     // ES8311 音频
     ESP_LOGI(TAG, "es8311_driver_init");
-    // es8311_driver_init(i2c_bus);
-
-    // 触摸
-    ESP_LOGI(TAG, "cst9217_init");
-    // cst9217_init(i2c_bus);
+    es8311_driver_init(i2c_bus);
+    es8311_stop();
 
     // LCD
     ESP_LOGI(TAG, "lcd_init");
     lcd_init();
+    lcd_set_sleep(true);
 
     // cst820
     ESP_LOGI(TAG, "cst820_init");
@@ -118,6 +153,16 @@ void app_main(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
     uint8_t i2c_buf[1] = {0x03};
     i2c_bus_write_reg(cst820_dev, 0xE5, 1, i2c_buf, 1); // 进入休眠
+
+    spi_bus_free(LCD_HOST);
+    i2c_bus_delete(&i2c_bus);
+
+    gpio_reset_pin((gpio_num_t)SYS_I2C_SDA);
+    gpio_reset_pin((gpio_num_t)SYS_I2C_SCL);
+    gpio_set_pull_mode((gpio_num_t)SYS_I2C_SDA, GPIO_PULLDOWN_ONLY);
+    gpio_set_pull_mode((gpio_num_t)SYS_I2C_SCL, GPIO_PULLDOWN_ONLY);
+    gpio_set_level((gpio_num_t)SYS_I2C_SDA, 0);
+    gpio_set_level((gpio_num_t)SYS_I2C_SCL, 0);
 
     // bool timer_triggered = false;
     // rx8130_is_timer_triggered(&timer_triggered);
@@ -133,30 +178,21 @@ void app_main(void)
     // }
     // rx8130_enable_timer(true);
 
-    // key1 key2 push pull high
-    gpio_config_t io_conf = {};
-    io_conf.intr_type = GPIO_INTR_DISABLE;    // 禁用中断
-    io_conf.mode = GPIO_MODE_OUTPUT;           // 设置为输出模式
-    io_conf.pin_bit_mask = ((1ULL<<1) | (1ULL<<2) | (1ULL<<21) | (1ULL<<39) | (1ULL<<11));
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    gpio_config(&io_conf);
+    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_1);   // KEY1
+    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_2);   // KEY2
+    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_21);  // TP_INT
+    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_13);  // IMU_INT
 
-    gpio_set_level(GPIO_NUM_1, 1);
-    gpio_set_level(GPIO_NUM_2, 1);
-    gpio_set_level(GPIO_NUM_21, 1);
-    gpio_set_level(GPIO_NUM_39, 1);
-    gpio_set_level(GPIO_NUM_11, 1);
+    gpio_reset_pin((gpio_num_t)GPIO_NUM_39);  // OLED_CS
+    gpio_set_direction((gpio_num_t)GPIO_NUM_39, GPIO_MODE_INPUT);
 
-    // gpio_config_t input_io_conf = {};
-    // input_io_conf.intr_type = GPIO_INTR_DISABLE;
-    // input_io_conf.mode = GPIO_MODE_DISABLE;
-    // input_io_conf.pin_bit_mask = ((1ULL<<38) | (1ULL<<46) | (1ULL<<45) | (1ULL<<40) | (1ULL<<42) | (1ULL<<41));
-    // input_io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    // input_io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    // gpio_config(&input_io_conf);
+    gpio_reset_pin((gpio_num_t)GPIO_NUM_11);  // MOS_Q10
+    gpio_set_direction((gpio_num_t)GPIO_NUM_11, GPIO_MODE_OUTPUT);
+    gpio_set_level((gpio_num_t)GPIO_NUM_11, 1);
 
-    sleep_mode(2);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    gpio_deep_sleep_hold_en();
+    esp_deep_sleep_start();
     
     ESP_LOGI(TAG, "Start main loop");
     while (1)
@@ -187,8 +223,9 @@ void sleep_mode(uint8_t sleep_mode) // 0: wake up, 1: light sleep, 2: deep sleep
     {
         // bq27220_enter_sleep_mode();
         // bmi270_dev_sleep();
-        lcd_set_sleep(true);
+        // lcd_set_sleep(true);
         vTaskDelay(1000 / portTICK_PERIOD_MS);
+        gpio_deep_sleep_hold_en();
         esp_deep_sleep_start();
     }
     while (1)

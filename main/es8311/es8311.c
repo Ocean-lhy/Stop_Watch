@@ -249,17 +249,25 @@ static void es8311_mute(int mute)
 /*
 * set es8311 into suspend mode
 */
-static void es8311_suspend(void)
+static int es8311_suspend(void)
 {
     ESP_LOGI(TAG, "Enter into es8311_suspend()");
-    es8311_write_reg(ES8311_DAC_REG32, 0x00);
-    es8311_write_reg(ES8311_ADC_REG17, 0x00);
-    es8311_write_reg(ES8311_SYSTEM_REG0E, 0xFF);
-    es8311_write_reg(ES8311_SYSTEM_REG12, 0x02);
-    es8311_write_reg(ES8311_SYSTEM_REG14, 0x00);
-    es8311_write_reg(ES8311_SYSTEM_REG0D, 0xFA);
-    es8311_write_reg(ES8311_ADC_REG15, 0x00);
-    es8311_write_reg(ES8311_GP_REG45, 0x01);
+    int ret = es8311_write_reg(ES8311_DAC_REG32, 0x00);
+    ret |= es8311_write_reg(ES8311_ADC_REG17, 0x00);
+    ret |= es8311_write_reg(ES8311_SYSTEM_REG0E, 0xFF);
+    ret |= es8311_write_reg(ES8311_SYSTEM_REG12, 0x02);
+    ret |= es8311_write_reg(ES8311_SYSTEM_REG14, 0x00);
+    ret |= es8311_write_reg(ES8311_SYSTEM_REG0D, 0xFA);
+    ret |= es8311_write_reg(ES8311_ADC_REG15, 0x00);
+    ret |= es8311_write_reg(ES8311_CLK_MANAGER_REG02, 0x10);
+    ret |= es8311_write_reg(ES8311_RESET_REG00, 0x00);
+    ret |= es8311_write_reg(ES8311_RESET_REG00, 0x1F);
+    ret |= es8311_write_reg(ES8311_CLK_MANAGER_REG01, 0x30);
+    ret |= es8311_write_reg(ES8311_CLK_MANAGER_REG01, 0x00);
+    ret |= es8311_write_reg(ES8311_GP_REG45, 0x00);
+    ret |= es8311_write_reg(ES8311_SYSTEM_REG0D, 0xFC);
+    ret |= es8311_write_reg(ES8311_CLK_MANAGER_REG02, 0x00);
+    return ret;
 }
 
 esp_err_t es8311_codec_init(audio_hal_codec_config_t *codec_cfg)
@@ -634,10 +642,9 @@ esp_err_t es8311_start(es_module_t mode)
     return ret;
 }
 
-esp_err_t es8311_stop(es_module_t mode)
+esp_err_t es8311_stop()
 {
-    esp_err_t ret = ESP_OK;
-    es8311_suspend();
+    esp_err_t ret = es8311_suspend();
     return ret;
 }
 

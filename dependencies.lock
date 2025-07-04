@@ -1,4 +1,14 @@
 dependencies:
+  espressif/cmake_utilities:
+    component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.1'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 0.5.3
   espressif/esp_codec_dev:
     component_hash: 18c22e1411224ba6103c4aca1b01bc740af33926756e9e106370a477d52bcba1
     dependencies:
@@ -19,10 +29,24 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.1.2
+  espressif/i2c_bus:
+    component_hash: e3dddc78baa172f4768f3973fbecbd6c6c1f2cb23cc6a36cf3132758be092482
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    - name: idf
+      require: private
+      version: '>=4.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.4.0
   idf:
     source:
       type: idf
-    version: 5.5.0
+    version: 5.4.1
   joltwallet/littlefs:
     component_hash: 34b8c56a14f10b440845fe972ce34ef41d1d205bcb139b3dfc58983a10abf59b
     dependencies:
@@ -40,12 +64,25 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 8.3.10
+  m5_ic_aw32001:
+    component_hash: 64043e79ac3927132317dfe9671ee7604b0c39fb9a98a6059def3028c231f1db
+    dependencies:
+    - name: idf
+      version: '>=4.4'
+    - name: espressif/i2c_bus
+      version: ^1.4.0
+    source:
+      git: https://moyongming:Yumoi3202a@gitlab.m5stack.com/embedded-common-components/m5_aw32001.git
+      path: .
+      type: git
+    version: e143874605548b42634c93e109b50eb3d12ea2bb
 direct_dependencies:
 - espressif/esp_codec_dev
 - espressif/esp_lcd_touch
 - idf
 - joltwallet/littlefs
 - lvgl/lvgl
-manifest_hash: 94159670292b233a1ec101eeffeb70e0b76ea7a3e441aaf6212bec75b62e14ae
+- m5_ic_aw32001
+manifest_hash: 9cec4b09eced1c31b809c1e062de4489be8bdd028389f221bd5fe2202114dd56
 target: esp32s3
 version: 2.0.0
