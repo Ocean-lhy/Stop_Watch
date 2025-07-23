@@ -26,6 +26,7 @@ extern "C"
 #include "lcd_driver.h"
 #include "rx8130ce.h"
 #include "m5_ic_aw32001.h"
+#include "py32_driver.h"
 
 #include "gui_guider.h"
 #include "custom.h"
@@ -42,7 +43,7 @@ i2c_bus_handle_t i2c_bus = NULL;
 static uint64_t last_blink_time = 0;
 static bool led_blink = false;
 
-m5_ic_aw32001 ic_aw32001(I2C_NUM_0, SYS_I2C_SDA, SYS_I2C_SCL, 400000); // I2C bus 0, SDA pin 21, SCL pin 22, 400kHz
+m5_ic_aw32001 ic_aw32001(I2C_NUM_0, SYS_I2C_SDA, SYS_I2C_SCL, 100000); // I2C bus 0, SDA pin 21, SCL pin 22, 400kHz
 
 void sleep_mode(uint8_t sleep_mode);
 
@@ -73,7 +74,7 @@ void app_main(void)
     conf.scl_io_num = SYS_I2C_SCL;
     conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
     conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.master.clk_speed = 400000;
+    conf.master.clk_speed = 100000;
     conf.clk_flags = 0;
     i2c_bus = i2c_bus_create(I2C_NUM_0, &conf);
 
@@ -87,16 +88,15 @@ void app_main(void)
             printf("i2c_addr[%d] = 0x%02x\n", i, i2c_addr[i]);
         }
     }
+
+    py32_init(i2c_bus);
     
-    // RX8130
-    ESP_LOGI(TAG, "RX8130 init");
-    // rx8130_init(i2c_bus);
 
     // 初始化各个驱动
-    ESP_LOGI(TAG, "motor_init");
+    // ESP_LOGI(TAG, "motor_init");
     // motor_init();
-    ESP_LOGI(TAG, "pi4io_init");
-    pi4io_init(i2c_bus);
+    // ESP_LOGI(TAG, "pi4io_init");
+    // pi4io_init(i2c_bus);
     
     // 充电管理
     ESP_LOGI(TAG, "aw32001_init");
@@ -123,7 +123,7 @@ void app_main(void)
     // IMU
     ESP_LOGI(TAG, "bmi270_dev_init");
     // bmi270_dev_init(i2c_bus);
-    i2c_bus_device_handle_t i2c_dev_handle_bmi270 = i2c_bus_device_create(i2c_bus, 0x68, 400000);
+    i2c_bus_device_handle_t i2c_dev_handle_bmi270 = i2c_bus_device_create(i2c_bus, 0x68, 100000);
     if (i2c_dev_handle_bmi270 == NULL)
     {
         ESP_LOGE(TAG, "i2c_dev_handle_bmi270 create failed");
@@ -145,7 +145,7 @@ void app_main(void)
 
     // cst820
     ESP_LOGI(TAG, "cst820_init");
-    i2c_bus_device_handle_t cst820_dev = i2c_bus_device_create(i2c_bus, 0x15, 400000);
+    i2c_bus_device_handle_t cst820_dev = i2c_bus_device_create(i2c_bus, 0x15, 100000);
     if (cst820_dev == NULL)
     {
         ESP_LOGE(TAG, "cst820_dev create failed");
@@ -153,6 +153,11 @@ void app_main(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
     uint8_t i2c_buf[1] = {0x03};
     i2c_bus_write_reg(cst820_dev, 0xE5, 1, i2c_buf, 1); // 进入休眠
+
+    esp_err_t ret = py32_sleep(1,10);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to sleep: %s", esp_err_to_name(ret));
+    }
 
     spi_bus_free(LCD_HOST);
     i2c_bus_delete(&i2c_bus);
@@ -185,7 +190,7 @@ void app_main(void)
 
     gpio_reset_pin((gpio_num_t)GPIO_NUM_39);  // OLED_CS
     gpio_set_direction((gpio_num_t)GPIO_NUM_39, GPIO_MODE_INPUT);
-
+    
     gpio_reset_pin((gpio_num_t)GPIO_NUM_11);  // MOS_Q10
     gpio_set_direction((gpio_num_t)GPIO_NUM_11, GPIO_MODE_OUTPUT);
     gpio_set_level((gpio_num_t)GPIO_NUM_11, 1);
@@ -203,7 +208,7 @@ void app_main(void)
 
 void sleep_mode(uint8_t sleep_mode) // 0: wake up, 1: light sleep, 2: deep sleep
 {
-    pi4io_sleep(sleep_mode);
+    // pi4io_sleep(sleep_mode);
     if (sleep_mode == 0)
     {
         lcd_set_sleep(false);

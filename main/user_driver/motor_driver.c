@@ -1,17 +1,14 @@
 #include "motor_driver.h"
+#include "py32_driver.h"
 #include "esp_log.h"
-#include "driver/ledc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
 
 static const char *TAG = "motor_driver";
 
-// PWM 配置
-#define MOTOR_PWM_FREQ        5000    // PWM频率Hz
-#define MOTOR_PWM_RESOLUTION  LEDC_TIMER_10_BIT  // 分辨率10位(0-1023)
-#define MOTOR_PWM_CHANNEL     LEDC_CHANNEL_0     // 使用通道0
-#define MOTOR_PWM_TIMER       LEDC_TIMER_0       // 使用定时器0
+// PWM 配置 (通过PY32 I2C扩展器)
+#define MOTOR_PWM_FREQ        1000    // PWM频率Hz (PY32固定为1KHz)
 
 // 电机任务配置
 #define MOTOR_TASK_STACK_SIZE 4096
@@ -47,57 +44,33 @@ static void motor_task(void *arg)
             // 限制强度范围
             if (cmd.intensity > 100) cmd.intensity = 100;
             
-            // 计算PWM值 (0-1023)
-            uint32_t pwm_value = (cmd.intensity * 1023) / 100;
-            
-            // 设置PWM占空比
-            ledc_set_duty(LEDC_LOW_SPEED_MODE, MOTOR_PWM_CHANNEL, pwm_value);
-            ledc_update_duty(LEDC_LOW_SPEED_MODE, MOTOR_PWM_CHANNEL);
+            // 使用PY32驱动启用电机PWM
+            if (cmd.intensity > 0) {
+                esp_err_t ret = py32_motor_enable(cmd.intensity);
+                if (ret != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to enable motor: %s", esp_err_to_name(ret));
+                    continue;
+                }
+            }
             
             // 等待指定时间
             vTaskDelay(cmd.duration_ms / portTICK_PERIOD_MS);
             
             // 关闭电机
-            ledc_set_duty(LEDC_LOW_SPEED_MODE, MOTOR_PWM_CHANNEL, 0);
-            ledc_update_duty(LEDC_LOW_SPEED_MODE, MOTOR_PWM_CHANNEL);
+            esp_err_t ret = py32_motor_enable(0);
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to disable motor: %s", esp_err_to_name(ret));
+            }
         }
     }
 }
 
 void motor_init()
 {
-    ESP_LOGI(TAG, "motor_init");
+    ESP_LOGI(TAG, "motor_init - using PY32 I2C expander PWM");
     
-    // 配置GPIO
-    gpio_config_t io_conf = {
-        .intr_type = GPIO_INTR_DISABLE,
-        .mode = GPIO_MODE_OUTPUT,
-        .pin_bit_mask = (1ULL << MOTOR_ENABLE_PIN),
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .pull_up_en = GPIO_PULLUP_DISABLE
-    };
-    gpio_config(&io_conf);
-    
-    // 配置LEDC PWM
-    ledc_timer_config_t ledc_timer = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .timer_num = MOTOR_PWM_TIMER,
-        .duty_resolution = MOTOR_PWM_RESOLUTION,
-        .freq_hz = MOTOR_PWM_FREQ,
-        .clk_cfg = LEDC_AUTO_CLK
-    };
-    ledc_timer_config(&ledc_timer);
-    
-    ledc_channel_config_t ledc_channel = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = MOTOR_PWM_CHANNEL,
-        .timer_sel = MOTOR_PWM_TIMER,
-        .intr_type = LEDC_INTR_DISABLE,
-        .gpio_num = MOTOR_ENABLE_PIN,
-        .duty = 0,  // 初始占空比为0
-        .hpoint = 0
-    };
-    ledc_channel_config(&ledc_channel);
+    // 注意：PWM引脚配置现在由PY32驱动管理
+    // GPIO_PIN_10 (PA7-IO10) 用于电机PWM控制
     
     // 创建电机命令队列
     motor_cmd_queue = xQueueCreate(5, sizeof(motor_cmd_t));
@@ -114,6 +87,12 @@ void motor_init()
         vQueueDelete(motor_cmd_queue);
         motor_cmd_queue = NULL;
         return;
+    }
+    
+    // 确保电机初始状态为关闭
+    esp_err_t ret = py32_motor_enable(0);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to disable motor during init: %s", esp_err_to_name(ret));
     }
     
     ESP_LOGI(TAG, "Motor driver initialized successfully");
@@ -177,10 +156,12 @@ void motor_stop()
     if (motor_cmd_queue != NULL) {
         // 清空队列
         xQueueReset(motor_cmd_queue);
-        
-        // 设置PWM占空比为0
-        ledc_set_duty(LEDC_LOW_SPEED_MODE, MOTOR_PWM_CHANNEL, 0);
-        ledc_update_duty(LEDC_LOW_SPEED_MODE, MOTOR_PWM_CHANNEL);
+    }
+    
+    // 通过PY32驱动禁用电机PWM
+    esp_err_t ret = py32_motor_disable();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to stop motor: %s", esp_err_to_name(ret));
     }
 }
 
@@ -192,4 +173,39 @@ void motor_enable()
 void motor_disable()
 {
     motor_stop();
+}
+
+// PWM频率控制
+esp_err_t motor_set_frequency(uint16_t frequency)
+{
+    ESP_LOGI(TAG, "设置电机PWM频率: %d Hz", frequency);
+    return py32_motor_set_frequency(frequency);
+}
+
+esp_err_t motor_get_frequency(uint16_t *frequency)
+{
+    if (frequency == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    esp_err_t ret = py32_motor_get_frequency(frequency);
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "当前电机PWM频率: %d Hz", *frequency);
+    }
+    return ret;
+}
+
+// PWM状态读取
+esp_err_t motor_get_pwm_status(uint8_t *duty_percent, bool *polarity, bool *enable)
+{
+    if (duty_percent == NULL || polarity == NULL || enable == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    
+    esp_err_t ret = py32_motor_get_pwm(duty_percent, polarity, enable);
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "电机PWM状态: 占空比=%d%%, 极性=%s, 使能=%s", 
+                 *duty_percent, *polarity ? "低电平有效" : "高电平有效", *enable ? "是" : "否");
+    }
+    return ret;
 }

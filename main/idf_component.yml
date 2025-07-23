@@ -10,7 +10,3 @@ dependencies:
   espressif/esp_lcd_touch: "^1.1.2"
   lvgl/lvgl: "=8.3.10"
   joltwallet/littlefs: "^1.19.1"
-  m5_ic_aw32001:
-    version: '*'
-    git: 
-      https://moyongming:Yumoi3202a@gitlab.m5stack.com/embedded-common-components/m5_aw32001.git
