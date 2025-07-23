@@ -26,6 +26,7 @@ extern "C"
 #include "lcd_driver.h"
 #include "rx8130ce.h"
 #include "time_utils.h"
+#include "py32_driver.h"
 
 #include "gui_guider.h"
 #include "custom.h"
@@ -52,6 +53,8 @@ int gyro_x = 0;
 int gyro_y = 0;
 int gyro_z = 0;
 uint8_t charge_status = 0;
+
+bool vin_det = false;
 
 // 录音和播放标志
 extern bool is_recording;
@@ -229,7 +232,7 @@ void app_main(void)
     conf.scl_io_num = SYS_I2C_SCL;
     conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
     conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.master.clk_speed = 400000;
+    conf.master.clk_speed = 100000;
     conf.clk_flags = 0;
     i2c_bus = i2c_bus_create(I2C_NUM_0, &conf);
 
@@ -243,6 +246,9 @@ void app_main(void)
             printf("i2c_addr[%d] = 0x%02x\n", i, i2c_addr[i]);
         }
     }
+
+    py32_init(i2c_bus);
+    
 
     // 初始化各个驱动
     ESP_LOGI(TAG, "motor_init");
@@ -312,8 +318,8 @@ void app_main(void)
             bmi270_dev_update();
             bmi270_get_data(&accel_x, &accel_y, &accel_z, &gyro_x, &gyro_y, &gyro_z);
             
-            // uint8_t vin_det = pi4io_vin_detect();
-            // printf("vin_det = %d\r\n", vin_det);
+            py32_vin_detect(&vin_det);
+            ESP_LOGI(TAG, "vin_det = %d\r\n", vin_det);
 
             update_data = true;
             // vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -323,6 +329,8 @@ void app_main(void)
         // 按键处理（带长按检测）
         if (gpio_get_level(USER_BUTTON1_PIN) == 0)
         {
+            ESP_LOGI(TAG, "btn1 pressed");
+
             if (!btn1_pressed)
             {
                 // 按键刚被按下
@@ -349,6 +357,24 @@ void app_main(void)
         {
             if (btn1_pressed)
             {
+                // test grove i2c expander
+                py32_grove_mode_t mode = PY32_GROVE_MODE_INPUT;
+                py32_grove_get_mode(&mode);
+                ESP_LOGI(TAG, "grove mode = %d", mode);
+                if (mode == PY32_GROVE_MODE_INPUT)
+                {
+                    mode = PY32_GROVE_MODE_OUTPUT;
+                    py32_grove_set_mode(mode);
+                    py32_grove_5v_enable();
+                    ESP_LOGI(TAG, "grove mode = %d", mode);
+                }
+                else
+                {
+                    mode = PY32_GROVE_MODE_INPUT;
+                    py32_grove_set_mode(mode);
+                    py32_grove_5v_disable();
+                    ESP_LOGI(TAG, "grove mode = %d", mode);
+                }
                 // 按键被释放
                 btn1_pressed = false;
                 uint64_t press_duration = esp_timer_get_time() - btn1_press_start_time;
@@ -504,21 +530,26 @@ void update_screen_data(void)
 
                     if (lv_obj_is_valid(guider_ui.screen_info_label_charge) && guider_ui.screen_info_label_charge != NULL) 
                     {
+                        const char* vin_str = vin_det ? ",vin" : ",no vin";
                         if (charge_status == 0)
                         {
                             strcpy(charge_buffer, "bat not charging");
+                            strcat(charge_buffer, vin_str);
                         }
                         else if (charge_status == 1)
                         {
                             strcpy(charge_buffer, "bat charging done");
+                            strcat(charge_buffer, vin_str);
                         }
                         else if (charge_status == 2)
                         {
                             strcpy(charge_buffer, "bat charging");
+                            strcat(charge_buffer, vin_str);
                         }
                         else if (charge_status == 3)
                         {
                             strcpy(charge_buffer, "bat pre charging");
+                            strcat(charge_buffer, vin_str);
                         }
                         lv_label_set_text_static(guider_ui.screen_info_label_charge, charge_buffer);
                     }

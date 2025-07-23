@@ -1,11 +1,11 @@
 #ifndef MOTOR_DRIVER_H
 #define MOTOR_DRIVER_H
 
-#include "driver/gpio.h"
 #include "esp_err.h"
+#include "stdbool.h"
 
-// 电机控制引脚定义
-#define MOTOR_ENABLE_PIN (gpio_num_t)13
+// 注意：电机控制现在通过PY32 I2C扩展器的PWM功能实现
+// 使用GPIO_PIN_10 (PA7-IO10)，由py32_driver管理
 
 // 初始化电机
 void motor_init();
@@ -29,6 +29,13 @@ void set_vibrate_cmd(uint8_t intensity, uint32_t duration_ms, uint32_t interval_
 
 // 获取电机振动命令
 void get_vibrate_cmd(uint8_t *intensity, uint32_t *duration_ms, uint32_t *interval_ms);
+
+// PWM频率控制
+esp_err_t motor_set_frequency(uint16_t frequency);
+esp_err_t motor_get_frequency(uint16_t *frequency);
+
+// PWM状态读取
+esp_err_t motor_get_pwm_status(uint8_t *duty_percent, bool *polarity, bool *enable);
 
 
 
