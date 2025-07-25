@@ -136,7 +136,7 @@ esp_err_t py32_init(i2c_bus_handle_t i2c_bus)
     // 禁用电机PWM
     i2c_expander_pwm_set_duty(py32_handle, PY32_MOTOR_PWM_CHANNEL, 0, false, true);
 
-    i2c_expander_set_i2c_config(py32_handle, 0, false);
+    i2c_expander_set_i2c_config(py32_handle, 0, false, false, false);
 
     // 打印初始化后的引脚状态
     print_all_pin_states("初始化后");
@@ -572,7 +572,7 @@ esp_err_t py32_sleep(uint8_t sleep_mode)
     // sleep_mode: 0=不休眠, 1-15=休眠时间
     uint8_t sleep_time = (sleep_mode > 0) ? sleep_mode : 0;
 
-    return i2c_expander_set_i2c_config(py32_handle, sleep_time, true);
+    return i2c_expander_set_i2c_config(py32_handle, sleep_time, true, false, false);
 }
 
 /**

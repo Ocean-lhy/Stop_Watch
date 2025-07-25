@@ -211,6 +211,14 @@ esp_err_t i2c_expander_deinit(i2c_expander_handle_t *handle)
     return ESP_OK;
 }
 
+esp_err_t i2c_expander_bootloader_enter(i2c_expander_handle_t *handle)
+{
+    if (handle == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return i2c_expander_write_reg(handle, 0xF0, 0x01);
+}
+
 /**
  * @brief 读取设备UID
  */
@@ -516,7 +524,11 @@ esp_err_t i2c_expander_temp_read(i2c_expander_handle_t *handle, uint16_t *temper
     } while (temp_ctrl & TEMP_CTRL_BUSY);
 
     // 读取转换结果
-    return i2c_expander_read_16bit_reg(handle, REG_TEMP_D_L, temperature);
+    uint16_t temp_d;
+    ret = i2c_expander_read_16bit_reg(handle, REG_TEMP_D_L, &temp_d);
+    if (ret != ESP_OK) return ret;
+    *temperature = temp_d & 0x0FFF;
+    return ESP_OK;
 }
 
 /**
@@ -687,7 +699,7 @@ esp_err_t i2c_expander_rtc_ram_read(i2c_expander_handle_t *handle, uint8_t offse
 /**
  * @brief 设置I2C配置
  */
-esp_err_t i2c_expander_set_i2c_config(i2c_expander_handle_t *handle, uint8_t sleep_time, bool speed_400k)
+esp_err_t i2c_expander_set_i2c_config(i2c_expander_handle_t *handle, uint8_t sleep_time, bool speed_400k, bool wake_mode, bool inter_pull_off)
 {
     if (sleep_time > 15) {
         return ESP_ERR_INVALID_ARG;
@@ -698,6 +710,19 @@ esp_err_t i2c_expander_set_i2c_config(i2c_expander_handle_t *handle, uint8_t sle
         i2c_cfg |= I2C_CFG_SPEED_400K;
     }
 
+    if (wake_mode) {
+        i2c_cfg |= I2C_CFG_WAKE_RISING;
+    }
+    else {
+        i2c_cfg |= I2C_CFG_WAKE_FALLING;
+    }
+
+    if (inter_pull_off) {
+        i2c_cfg |= I2C_CFG_INTER_PULL_OFF;
+    }
+    else {
+        i2c_cfg |= I2C_CFG_INTER_PULL_ON;
+    }
     return i2c_expander_write_reg(handle, REG_I2C_CFG, i2c_cfg);
 }
 

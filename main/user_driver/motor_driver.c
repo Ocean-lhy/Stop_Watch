@@ -57,7 +57,7 @@ static void motor_task(void *arg)
             vTaskDelay(cmd.duration_ms / portTICK_PERIOD_MS);
             
             // 关闭电机
-            esp_err_t ret = py32_motor_enable(0);
+            esp_err_t ret = py32_motor_disable();
             if (ret != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to disable motor: %s", esp_err_to_name(ret));
             }

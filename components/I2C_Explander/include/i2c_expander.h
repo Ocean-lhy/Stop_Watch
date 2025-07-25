@@ -110,6 +110,10 @@ extern "C" {
 #define I2C_CFG_SLEEP_MASK          0x0F    // 休眠时间掩码
 #define I2C_CFG_SPEED_100K          (1<<0)  // I2C速度100KHz
 #define I2C_CFG_SPEED_400K          (1<<4)  // I2C速度400KHz
+#define I2C_CFG_WAKE_FALLING        (0<<5)  // 唤醒下降沿
+#define I2C_CFG_WAKE_RISING         (1<<5)  // 唤醒上升沿
+#define I2C_CFG_INTER_PULL_ON       (0<<6)  // 内部上拉使能
+#define I2C_CFG_INTER_PULL_OFF      (1<<6)  // 内部上拉禁止
 
 // LED_CFG寄存器
 #define LED_CFG_NUM_MASK            0x3F    // LED数量掩码
@@ -392,7 +396,7 @@ esp_err_t i2c_expander_rtc_ram_read(i2c_expander_handle_t *handle, uint8_t offse
  * @param speed_400k 是否使用400KHz速度
  * @return ESP_OK成功，其他值失败
  */
-esp_err_t i2c_expander_set_i2c_config(i2c_expander_handle_t *handle, uint8_t sleep_time, bool speed_400k);
+esp_err_t i2c_expander_set_i2c_config(i2c_expander_handle_t *handle, uint8_t sleep_time, bool speed_400k, bool wake_mode, bool inter_pull_off);
 
 /**
  * @brief 读取参考电压
@@ -409,6 +413,13 @@ esp_err_t i2c_expander_gpio_get_input_reg(i2c_expander_handle_t *handle, uint16_
 esp_err_t i2c_expander_gpio_get_pull_up_reg(i2c_expander_handle_t *handle, uint16_t *pull_up_reg);
 esp_err_t i2c_expander_gpio_get_pull_down_reg(i2c_expander_handle_t *handle, uint16_t *pull_down_reg);
 esp_err_t i2c_expander_gpio_get_drive_reg(i2c_expander_handle_t *handle, uint16_t *drive_reg);
+
+/**
+ * @brief 进入Bootloader模式
+ * @param handle 句柄
+ * @return ESP_OK成功，其他值失败
+ */
+esp_err_t i2c_expander_bootloader_enter(i2c_expander_handle_t *handle);
 
 #ifdef __cplusplus
 }
