@@ -5,8 +5,14 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "driver/gpio.h"
 
 #define MAX_POINTS_REPORT 5
+
+#define TOUCH_INT_PIN (gpio_num_t)13
+#define TOUCH_RST_PIN (gpio_num_t)14
+#define TOUCH_SCL_PIN (gpio_num_t)48
+#define TOUCH_SDA_PIN (gpio_num_t)47
 
 static const char *TAG = "cst820_driver";
 static i2c_bus_device_handle_t cst820_dev = NULL;
@@ -19,8 +25,29 @@ uint16_t cst820_x = 0;
 uint16_t cst820_y = 0;
 uint8_t cst820_status = 0;
 
+/**
+ * @brief 复位触摸屏
+ */
+esp_err_t cst820_tp_reset(void)
+{
+    ESP_LOGI(TAG, "复位触摸屏");
+
+    // 拉低复位引脚
+    gpio_set_level(TOUCH_RST_PIN, 0);
+
+    vTaskDelay(pdMS_TO_TICKS(10));  // 延时10ms
+
+    // 拉高复位引脚
+    gpio_set_level(TOUCH_RST_PIN, 1);
+
+    vTaskDelay(pdMS_TO_TICKS(50));  // 延时50ms等待复位完成
+
+    return ESP_OK;
+}
+
 int cst820_init(i2c_bus_handle_t i2c_bus)
 {
+    cst820_tp_reset();
     if (touch_mux == NULL)
     {
         touch_mux = xSemaphoreCreateBinary();

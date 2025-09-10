@@ -211,7 +211,7 @@ void touch_driver_wakeup(void)
     
     switch (touch_data.chip_type) {
         case TOUCH_CHIP_CST820:
-            pi4io_tp_reset();
+            // pi4io_tp_reset();
             break;
             
         case TOUCH_CHIP_CST9217:

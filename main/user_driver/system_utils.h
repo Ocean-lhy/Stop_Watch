@@ -13,6 +13,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "driver/gpio.h"
+#include "lcd_driver.h"
 
 #include "esp_littlefs.h"
 
@@ -25,11 +26,10 @@
 #define USER_BUTTON1_PIN (gpio_num_t)1
 #define USER_BUTTON2_PIN (gpio_num_t)2
 
-// power off
-#define PWROFF_PLUSE_PIN (gpio_num_t)12
+#define IRQ_PIN (gpio_num_t)12
 
 // 中断管脚
-#define TP_INT_IRQ_PIN (gpio_num_t)21
+#define TP_INT_IRQ_PIN TOUCH_INT_PIN
 
 // Grove接口
 #define GROVE_3_PIN (gpio_num_t)9

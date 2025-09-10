@@ -45,7 +45,8 @@ idf_component_register(
         esp_lcd_touch 
         esp_lcd_co5300 
         esp_wifi
-        I2C_Explander
+        IO_Explander
+        m5_stamp_pm1
     EMBED_TXTFILES "test.pcm"
 )
 

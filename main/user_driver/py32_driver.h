@@ -11,17 +11,16 @@ extern "C" {
 #endif
 
 // PY32引脚功能映射 (基于I2C扩展器GPIO引脚定义)
-#define PY32_TP_RST_PIN        0  // GPIO_PIN_1 (PB5-IO1): 触摸复位
-#define PY32_SPK_EN_PIN        1  // GPIO_PIN_2 (PB1-IO2): 扬声器使能
-#define PY32_MUX_CTR_PIN       2  // GPIO_PIN_3 (PA1-IO3): CH442E MUX控制
-#define PY32_GROVE_DIR_PIN     3  // GPIO_PIN_4 (PA3-IO4): GROVE接口方向控制
-#define PY32_VIN_DET_PIN       4  // GPIO_PIN_5 (PA4-IO5): 电压检测(输入)
-#define PY32_OLED_RST_PIN      5  // GPIO_PIN_6 (PA5-IO6): OLED复位
-#define PY32_GROVE_VOUT_EN_PIN 8  // GPIO_PIN_9 (PA0-IO9): GROVE 5V输出使能
-#define PY32_MOTOR_EN_PIN      9  // GPIO_PIN_10 (PA7-IO10): 电机使能(PWM)
+#define PY32_MUX_CTR_PIN       2  // GPIO_PIN_3 (PC1-IO3): CH442E MUX控制
+
+#define PY32_AU_EN_PIN         2  // GPIO_PIN_3 (PA1-IO3): 音频使能
+#define PY32_L3B_EN_PIN        7  // GPIO_PIN_8 (PB0-IO8): L3B使能
+#define PY32_MOTOR_EN_PIN      8  // GPIO_PIN_9 (PA0-IO9): 电机使能(PWM)
+#define PY32_SPK_EN_PIN        10 // GPIO_PIN_11 (PB2-IO11): 扬声器使能
+#define PY32_OLED_RST_PIN      13 // GPIO_PIN_14 (PB7-IO14): OLED复位
 
 // PWM通道定义
-#define PY32_MOTOR_PWM_CHANNEL 3  // PWM_CHANNEL_4对应IO10(PA7)
+#define PY32_MOTOR_PWM_CHANNEL 0  // PWM_CHANNEL_1对应IO9(PA0)
 
 // MUX控制模式定义
 typedef enum {
@@ -47,12 +46,6 @@ esp_err_t py32_init(i2c_bus_handle_t i2c_bus);
  * @return ESP_OK成功，其他值失败
  */
 esp_err_t py32_deinit(void);
-
-/**
- * @brief 复位触摸屏
- * @return ESP_OK成功，其他值失败
- */
-esp_err_t py32_tp_reset(void);
 
 /**
  * @brief 启用扬声器

@@ -1,35 +1,53 @@
-#include "i2c_expander.h"
+/*
+ * SPDX-FileCopyrightText: 2025 M5Stack Technology CO LTD
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#include "io_expander.h"
 #include <string.h>
 #include <stdlib.h>
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-static const char *TAG = "I2C_EXPANDER";
+static const char *TAG = "IO_EXPANDER";
 
-// 内部函数声明
-static esp_err_t i2c_expander_write_reg(i2c_expander_handle_t *handle, uint8_t reg_addr, uint8_t data);
-static esp_err_t i2c_expander_read_reg(i2c_expander_handle_t *handle, uint8_t reg_addr, uint8_t *data);
-static esp_err_t i2c_expander_write_16bit_reg(i2c_expander_handle_t *handle, uint8_t reg_addr_l, uint16_t data);
-static esp_err_t i2c_expander_read_16bit_reg(i2c_expander_handle_t *handle, uint8_t reg_addr_l, uint16_t *data);
-static esp_err_t i2c_expander_write_multi_reg(i2c_expander_handle_t *handle, uint8_t reg_addr, const uint8_t *data, uint8_t length);
-static esp_err_t i2c_expander_read_multi_reg(i2c_expander_handle_t *handle, uint8_t reg_addr, uint8_t *data, uint8_t length);
+// ====================================================================================
+// 内部函数声明 (Private Function Declarations)
+// ====================================================================================
+static esp_err_t io_expander_write_reg(io_expander_handle_t *handle, uint8_t reg_addr, uint8_t data);
+static esp_err_t io_expander_read_reg(io_expander_handle_t *handle, uint8_t reg_addr, uint8_t *data);
+static esp_err_t io_expander_write_16bit_reg(io_expander_handle_t *handle, uint8_t reg_addr_l, uint16_t data);
+static esp_err_t io_expander_read_16bit_reg(io_expander_handle_t *handle, uint8_t reg_addr_l, uint16_t *data);
+static esp_err_t io_expander_write_multi_reg(io_expander_handle_t *handle, uint8_t reg_addr, const uint8_t *data, uint8_t length);
+static esp_err_t io_expander_read_multi_reg(io_expander_handle_t *handle, uint8_t reg_addr, uint8_t *data, uint8_t length);
 static bool gpio_pins_conflict(uint8_t pin1, uint8_t pin2);
 
-// 中断互斥关系映射表
+// ====================================================================================
+// 静态数据定义 (Static Data Definitions)
+// ====================================================================================
+
+// 中断互斥关系映射表 (GPIO Interrupt Conflict Map)
 static const uint8_t gpio_conflict_map[][2] = {
-    {GPIO_PIN_1, GPIO_PIN_6},   // 1-6
-    {GPIO_PIN_2, GPIO_PIN_3},   // 2-3  
-    {GPIO_PIN_7, GPIO_PIN_12},  // 7-12
-    {GPIO_PIN_8, GPIO_PIN_9},   // 8-9
-    {GPIO_PIN_10, GPIO_PIN_14}, // 10-14
-    {GPIO_PIN_11, GPIO_PIN_13}, // 11-13
+    {IO_EXP_GPIO_PIN_1, IO_EXP_GPIO_PIN_6},   // 1-6
+    {IO_EXP_GPIO_PIN_2, IO_EXP_GPIO_PIN_3},   // 2-3  
+    {IO_EXP_GPIO_PIN_7, IO_EXP_GPIO_PIN_12},  // 7-12
+    {IO_EXP_GPIO_PIN_8, IO_EXP_GPIO_PIN_9},   // 8-9
+    {IO_EXP_GPIO_PIN_10, IO_EXP_GPIO_PIN_14}, // 10-14
+    {IO_EXP_GPIO_PIN_11, IO_EXP_GPIO_PIN_13}, // 11-13
 };
+
+// ====================================================================================
+// 私有函数实现 (Private Function Implementations)
+// ====================================================================================
+
+// I2C通信函数 (I2C Communication Functions)
 
 /**
  * @brief 写入单个寄存器
  */
-static esp_err_t i2c_expander_write_reg(i2c_expander_handle_t *handle, uint8_t reg_addr, uint8_t data)
+static esp_err_t io_expander_write_reg(io_expander_handle_t *handle, uint8_t reg_addr, uint8_t data)
 {
     if (handle == NULL || !handle->initialized) {
         return ESP_ERR_INVALID_ARG;
@@ -51,7 +69,7 @@ static esp_err_t i2c_expander_write_reg(i2c_expander_handle_t *handle, uint8_t r
 /**
  * @brief 读取单个寄存器
  */
-static esp_err_t i2c_expander_read_reg(i2c_expander_handle_t *handle, uint8_t reg_addr, uint8_t *data)
+static esp_err_t io_expander_read_reg(io_expander_handle_t *handle, uint8_t reg_addr, uint8_t *data)
 {
     if (handle == NULL || !handle->initialized || data == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -75,21 +93,21 @@ static esp_err_t i2c_expander_read_reg(i2c_expander_handle_t *handle, uint8_t re
 /**
  * @brief 写入16位寄存器（小端序）
  */
-static esp_err_t i2c_expander_write_16bit_reg(i2c_expander_handle_t *handle, uint8_t reg_addr_l, uint16_t data)
+static esp_err_t io_expander_write_16bit_reg(io_expander_handle_t *handle, uint8_t reg_addr_l, uint16_t data)
 {
     uint8_t data_bytes[2] = {data & 0xFF, (data >> 8) & 0xFF};
-    return i2c_expander_write_multi_reg(handle, reg_addr_l, data_bytes, 2);
+    return io_expander_write_multi_reg(handle, reg_addr_l, data_bytes, 2);
 }
 
 /**
  * @brief 读取16位寄存器（小端序）
  */
-static esp_err_t i2c_expander_read_16bit_reg(i2c_expander_handle_t *handle, uint8_t reg_addr_l, uint16_t *data)
+static esp_err_t io_expander_read_16bit_reg(io_expander_handle_t *handle, uint8_t reg_addr_l, uint16_t *data)
 {
     if (data == NULL) return ESP_ERR_INVALID_ARG;
     
     uint8_t data_bytes[2];
-    esp_err_t ret = i2c_expander_read_multi_reg(handle, reg_addr_l, data_bytes, 2);
+    esp_err_t ret = io_expander_read_multi_reg(handle, reg_addr_l, data_bytes, 2);
     if (ret == ESP_OK) {
         *data = (data_bytes[1] << 8) | data_bytes[0];
     }
@@ -99,7 +117,7 @@ static esp_err_t i2c_expander_read_16bit_reg(i2c_expander_handle_t *handle, uint
 /**
  * @brief 写入多个寄存器
  */
-static esp_err_t i2c_expander_write_multi_reg(i2c_expander_handle_t *handle, uint8_t reg_addr, const uint8_t *data, uint8_t length)
+static esp_err_t io_expander_write_multi_reg(io_expander_handle_t *handle, uint8_t reg_addr, const uint8_t *data, uint8_t length)
 {
     if (handle == NULL || !handle->initialized || data == NULL || length == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -125,7 +143,7 @@ static esp_err_t i2c_expander_write_multi_reg(i2c_expander_handle_t *handle, uin
 /**
  * @brief 读取多个寄存器
  */
-static esp_err_t i2c_expander_read_multi_reg(i2c_expander_handle_t *handle, uint8_t reg_addr, uint8_t *data, uint8_t length)
+static esp_err_t io_expander_read_multi_reg(io_expander_handle_t *handle, uint8_t reg_addr, uint8_t *data, uint8_t length)
 {
     if (handle == NULL || !handle->initialized || data == NULL || length == 0) {
         return ESP_ERR_INVALID_ARG;
@@ -164,28 +182,34 @@ static bool gpio_pins_conflict(uint8_t pin1, uint8_t pin2)
     return false;
 }
 
+// ====================================================================================
+// 公共函数实现 (Public Function Implementations)
+// ====================================================================================
+
+// 系统初始化和管理函数 (System Initialization and Management Functions)
+
 /**
  * @brief 初始化I2C扩展器
  */
-esp_err_t i2c_expander_init(const i2c_expander_config_t *config, i2c_expander_handle_t **handle)
+esp_err_t io_expander_init(const io_expander_config_t *config, io_expander_handle_t **handle)
 {
     if (config == NULL || handle == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     // 分配内存
-    i2c_expander_handle_t *h = malloc(sizeof(i2c_expander_handle_t));
+    io_expander_handle_t *h = malloc(sizeof(io_expander_handle_t));
     if (h == NULL) {
         return ESP_ERR_NO_MEM;
     }
 
     // 复制配置
-    memcpy(&h->config, config, sizeof(i2c_expander_config_t));
+    memcpy(&h->config, config, sizeof(io_expander_config_t));
     h->initialized = true;
 
     // 测试通信
     uint16_t uid;
-    esp_err_t ret = i2c_expander_read_uid(h, &uid);
+    esp_err_t ret = io_expander_read_uid(h, &uid);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "无法与I2C扩展器通信: %s", esp_err_to_name(ret));
         free(h);
@@ -200,7 +224,7 @@ esp_err_t i2c_expander_init(const i2c_expander_config_t *config, i2c_expander_ha
 /**
  * @brief 反初始化I2C扩展器
  */
-esp_err_t i2c_expander_deinit(i2c_expander_handle_t *handle)
+esp_err_t io_expander_deinit(io_expander_handle_t *handle)
 {
     if (handle == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -211,35 +235,58 @@ esp_err_t i2c_expander_deinit(i2c_expander_handle_t *handle)
     return ESP_OK;
 }
 
-esp_err_t i2c_expander_bootloader_enter(i2c_expander_handle_t *handle)
+esp_err_t io_expander_bootloader_enter(io_expander_handle_t *handle)
 {
     if (handle == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return i2c_expander_write_reg(handle, 0xF0, 0x01);
+    return io_expander_write_reg(handle, 0xF0, 0x01);
+}
+
+/**
+ * @brief 恢复出厂设置
+ */
+esp_err_t io_expander_factory_reset(io_expander_handle_t *handle)
+{
+    if (handle == NULL || !handle->initialized) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "正在执行恢复出厂设置...");
+    
+    esp_err_t ret = io_expander_write_reg(handle, REG_FACTORY_RESET, FACTORY_RESET_TRIGGER);
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "恢复出厂设置命令已发送");
+        // 给设备一些时间来处理恢复操作
+        vTaskDelay(pdMS_TO_TICKS(100));
+    } else {
+        ESP_LOGE(TAG, "恢复出厂设置失败: %s", esp_err_to_name(ret));
+    }
+    
+    return ret;
 }
 
 /**
  * @brief 读取设备UID
  */
-esp_err_t i2c_expander_read_uid(i2c_expander_handle_t *handle, uint16_t *uid)
+esp_err_t io_expander_read_uid(io_expander_handle_t *handle, uint16_t *uid)
 {
     if (uid == NULL) return ESP_ERR_INVALID_ARG;
     
-    return i2c_expander_read_16bit_reg(handle, REG_UID_L, uid);
+    return io_expander_read_16bit_reg(handle, REG_UID_L, uid);
 }
 
 /**
  * @brief 读取版本信息
  */
-esp_err_t i2c_expander_read_version(i2c_expander_handle_t *handle, uint8_t *hw_version, uint8_t *fw_version)
+esp_err_t io_expander_read_version(io_expander_handle_t *handle, uint8_t *hw_version, uint8_t *fw_version)
 {
     if (hw_version == NULL || fw_version == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint8_t version_reg;
-    esp_err_t ret = i2c_expander_read_reg(handle, REG_VERSION, &version_reg);
+    esp_err_t ret = io_expander_read_reg(handle, REG_VERSION, &version_reg);
     if (ret == ESP_OK) {
         *hw_version = (version_reg >> 4) & 0x0F;
         *fw_version = version_reg & 0x0F;
@@ -247,39 +294,41 @@ esp_err_t i2c_expander_read_version(i2c_expander_handle_t *handle, uint8_t *hw_v
     return ret;
 }
 
+// GPIO功能函数 (GPIO Functions)
+
 /**
  * @brief 设置GPIO模式
  */
-esp_err_t i2c_expander_gpio_set_mode(i2c_expander_handle_t *handle, uint8_t pin, i2c_exp_gpio_mode_t mode)
+esp_err_t io_expander_gpio_set_mode(io_expander_handle_t *handle, uint8_t pin, io_exp_gpio_mode_t mode)
 {
-    if (pin > GPIO_PIN_14) {
+    if (pin > IO_EXP_GPIO_PIN_14) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint16_t gpio_mode;
-    esp_err_t ret = i2c_expander_read_16bit_reg(handle, REG_GPIO_M_L, &gpio_mode);
+    esp_err_t ret = io_expander_read_16bit_reg(handle, REG_GPIO_M_L, &gpio_mode);
     if (ret != ESP_OK) return ret;
 
-    if (mode == I2C_EXP_GPIO_MODE_OUTPUT) {
+    if (mode == IO_EXP_GPIO_MODE_OUTPUT) {
         gpio_mode |= (1 << pin);
     } else {
         gpio_mode &= ~(1 << pin);
     }
 
-    return i2c_expander_write_16bit_reg(handle, REG_GPIO_M_L, gpio_mode);
+    return io_expander_write_16bit_reg(handle, REG_GPIO_M_L, gpio_mode);
 }
 
 /**
  * @brief 设置GPIO输出电平
  */
-esp_err_t i2c_expander_gpio_set_level(i2c_expander_handle_t *handle, uint8_t pin, uint8_t level)
+esp_err_t io_expander_gpio_set_level(io_expander_handle_t *handle, uint8_t pin, uint8_t level)
 {
-    if (pin > GPIO_PIN_14) {
+    if (pin > IO_EXP_GPIO_PIN_14) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint16_t gpio_output;
-    esp_err_t ret = i2c_expander_read_16bit_reg(handle, REG_GPIO_O_L, &gpio_output);
+    esp_err_t ret = io_expander_read_16bit_reg(handle, REG_GPIO_O_L, &gpio_output);
     if (ret != ESP_OK) return ret;
 
     if (level) {
@@ -288,20 +337,20 @@ esp_err_t i2c_expander_gpio_set_level(i2c_expander_handle_t *handle, uint8_t pin
         gpio_output &= ~(1 << pin);
     }
 
-    return i2c_expander_write_16bit_reg(handle, REG_GPIO_O_L, gpio_output);
+    return io_expander_write_16bit_reg(handle, REG_GPIO_O_L, gpio_output);
 }
 
 /**
  * @brief 读取GPIO输入电平
  */
-esp_err_t i2c_expander_gpio_get_level(i2c_expander_handle_t *handle, uint8_t pin, uint8_t *level)
+esp_err_t io_expander_gpio_get_level(io_expander_handle_t *handle, uint8_t pin, uint8_t *level)
 {
-    if (pin > GPIO_PIN_14 || level == NULL) {
+    if (pin > IO_EXP_GPIO_PIN_14 || level == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint16_t gpio_input;
-    esp_err_t ret = i2c_expander_read_16bit_reg(handle, REG_GPIO_I_L, &gpio_input);
+    esp_err_t ret = io_expander_read_16bit_reg(handle, REG_GPIO_I_L, &gpio_input);
     if (ret == ESP_OK) {
         *level = (gpio_input & (1 << pin)) ? 1 : 0;
     }
@@ -311,19 +360,19 @@ esp_err_t i2c_expander_gpio_get_level(i2c_expander_handle_t *handle, uint8_t pin
 /**
  * @brief 设置GPIO上下拉
  */
-esp_err_t i2c_expander_gpio_set_pull(i2c_expander_handle_t *handle, uint8_t pin, i2c_exp_gpio_pull_t pull)
+esp_err_t io_expander_gpio_set_pull(io_expander_handle_t *handle, uint8_t pin, io_exp_gpio_pull_t pull)
 {
-    if (pin > GPIO_PIN_14) {
+    if (pin > IO_EXP_GPIO_PIN_14) {
         return ESP_ERR_INVALID_ARG;
     }
 
     esp_err_t ret;
     uint16_t gpio_pu, gpio_pd;
 
-    ret = i2c_expander_read_16bit_reg(handle, REG_GPIO_PU_L, &gpio_pu);
+    ret = io_expander_read_16bit_reg(handle, REG_GPIO_PU_L, &gpio_pu);
     if (ret != ESP_OK) return ret;
 
-    ret = i2c_expander_read_16bit_reg(handle, REG_GPIO_PD_L, &gpio_pd);
+    ret = io_expander_read_16bit_reg(handle, REG_GPIO_PD_L, &gpio_pd);
     if (ret != ESP_OK) return ret;
 
     // 清除当前设置
@@ -331,65 +380,65 @@ esp_err_t i2c_expander_gpio_set_pull(i2c_expander_handle_t *handle, uint8_t pin,
     gpio_pd &= ~(1 << pin);
 
     switch (pull) {
-        case I2C_EXP_GPIO_PULL_UP:
+        case IO_EXP_GPIO_PULL_UP:
             gpio_pu |= (1 << pin);
             break;
-        case I2C_EXP_GPIO_PULL_DOWN:
+        case IO_EXP_GPIO_PULL_DOWN:
             gpio_pd |= (1 << pin);
             break;
-        case I2C_EXP_GPIO_PULL_NONE:
+        case IO_EXP_GPIO_PULL_NONE:
         default:
             // 已经清除了，不需要额外操作
             break;
     }
 
-    ret = i2c_expander_write_16bit_reg(handle, REG_GPIO_PU_L, gpio_pu);
+    ret = io_expander_write_16bit_reg(handle, REG_GPIO_PU_L, gpio_pu);
     if (ret != ESP_OK) return ret;
 
-    return i2c_expander_write_16bit_reg(handle, REG_GPIO_PD_L, gpio_pd);
+    return io_expander_write_16bit_reg(handle, REG_GPIO_PD_L, gpio_pd);
 }
 
 /**
  * @brief 设置GPIO驱动模式
  */
-esp_err_t i2c_expander_gpio_set_drive(i2c_expander_handle_t *handle, uint8_t pin, i2c_exp_gpio_drive_t drive)
+esp_err_t io_expander_gpio_set_drive(io_expander_handle_t *handle, uint8_t pin, io_exp_gpio_drive_t drive)
 {
-    if (pin > GPIO_PIN_14) {
+    if (pin > IO_EXP_GPIO_PIN_14) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint16_t gpio_drive;
-    esp_err_t ret = i2c_expander_read_16bit_reg(handle, REG_GPIO_DRV_L, &gpio_drive);
+    esp_err_t ret = io_expander_read_16bit_reg(handle, REG_GPIO_DRV_L, &gpio_drive);
     if (ret != ESP_OK) return ret;
 
-    if (drive == I2C_EXP_GPIO_DRIVE_OPEN_DRAIN) {
+    if (drive == IO_EXP_GPIO_DRIVE_OPEN_DRAIN) {
         gpio_drive |= (1 << pin);
     } else {
         gpio_drive &= ~(1 << pin);
     }
 
-    return i2c_expander_write_16bit_reg(handle, REG_GPIO_DRV_L, gpio_drive);
+    return io_expander_write_16bit_reg(handle, REG_GPIO_DRV_L, gpio_drive);
 }
 
 /**
  * @brief 设置GPIO中断
  */
-esp_err_t i2c_expander_gpio_set_interrupt(i2c_expander_handle_t *handle, uint8_t pin, i2c_exp_gpio_intr_t intr_type)
+esp_err_t io_expander_gpio_set_interrupt(io_expander_handle_t *handle, uint8_t pin, io_exp_gpio_intr_t intr_type)
 {
-    if (pin > GPIO_PIN_14) {
+    if (pin > IO_EXP_GPIO_PIN_14) {
         return ESP_ERR_INVALID_ARG;
     }
 
     esp_err_t ret;
     uint16_t gpio_ie, gpio_it;
 
-    ret = i2c_expander_read_16bit_reg(handle, REG_GPIO_IE_L, &gpio_ie);
+    ret = io_expander_read_16bit_reg(handle, REG_GPIO_IE_L, &gpio_ie);
     if (ret != ESP_OK) return ret;
 
-    ret = i2c_expander_read_16bit_reg(handle, REG_GPIO_IT_L, &gpio_it);
+    ret = io_expander_read_16bit_reg(handle, REG_GPIO_IT_L, &gpio_it);
     if (ret != ESP_OK) return ret;
 
-    if (intr_type == I2C_EXP_GPIO_INTR_DISABLE) {
+    if (intr_type == IO_EXP_GPIO_INTR_DISABLE) {
         gpio_ie &= ~(1 << pin);
     } else {
         // 检查中断冲突
@@ -402,52 +451,54 @@ esp_err_t i2c_expander_gpio_set_interrupt(i2c_expander_handle_t *handle, uint8_t
 
         gpio_ie |= (1 << pin);
         
-        if (intr_type == I2C_EXP_GPIO_INTR_RISING_EDGE) {
+        if (intr_type == IO_EXP_GPIO_INTR_RISING_EDGE) {
             gpio_it |= (1 << pin);
         } else {
             gpio_it &= ~(1 << pin);
         }
     }
 
-    ret = i2c_expander_write_16bit_reg(handle, REG_GPIO_IE_L, gpio_ie);
+    ret = io_expander_write_16bit_reg(handle, REG_GPIO_IE_L, gpio_ie);
     if (ret != ESP_OK) return ret;
 
-    return i2c_expander_write_16bit_reg(handle, REG_GPIO_IT_L, gpio_it);
+    return io_expander_write_16bit_reg(handle, REG_GPIO_IT_L, gpio_it);
 }
 
 /**
  * @brief 读取GPIO中断状态
  */
-esp_err_t i2c_expander_gpio_get_interrupt_status(i2c_expander_handle_t *handle, uint16_t *status)
+esp_err_t io_expander_gpio_get_interrupt_status(io_expander_handle_t *handle, uint16_t *status)
 {
     if (status == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    return i2c_expander_read_16bit_reg(handle, REG_GPIO_IS_L, status);
+    return io_expander_read_16bit_reg(handle, REG_GPIO_IS_L, status);
 }
 
 /**
  * @brief 清除GPIO中断状态
  */
-esp_err_t i2c_expander_gpio_clear_interrupt(i2c_expander_handle_t *handle, uint8_t pin)
+esp_err_t io_expander_gpio_clear_interrupt(io_expander_handle_t *handle, uint8_t pin)
 {
-    if (pin > GPIO_PIN_14) {
+    if (pin > IO_EXP_GPIO_PIN_14) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint16_t gpio_is;
-    esp_err_t ret = i2c_expander_read_16bit_reg(handle, REG_GPIO_IS_L, &gpio_is);
+    esp_err_t ret = io_expander_read_16bit_reg(handle, REG_GPIO_IS_L, &gpio_is);
     if (ret != ESP_OK) return ret;
 
     gpio_is &= ~(1 << pin);  // 写0清除
-    return i2c_expander_write_16bit_reg(handle, REG_GPIO_IS_L, gpio_is);
+    return io_expander_write_16bit_reg(handle, REG_GPIO_IS_L, gpio_is);
 }
+
+// ADC功能函数 (ADC Functions)
 
 /**
  * @brief 启动ADC转换
  */
-esp_err_t i2c_expander_adc_read(i2c_expander_handle_t *handle, uint8_t channel, uint16_t *result)
+esp_err_t io_expander_adc_read(io_expander_handle_t *handle, uint8_t channel, uint16_t *result)
 {
     if (channel < 1 || channel > 4 || result == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -457,14 +508,14 @@ esp_err_t i2c_expander_adc_read(i2c_expander_handle_t *handle, uint8_t channel, 
 
     // 设置通道并启动转换
     uint8_t adc_ctrl = (channel & ADC_CTRL_CH_MASK) | ADC_CTRL_START;
-    ret = i2c_expander_write_reg(handle, REG_ADC_CTRL, adc_ctrl);
+    ret = io_expander_write_reg(handle, REG_ADC_CTRL, adc_ctrl);
     if (ret != ESP_OK) return ret;
 
     // 等待转换完成
     uint8_t busy_count = 0;
     do {
         vTaskDelay(pdMS_TO_TICKS(1));
-        ret = i2c_expander_read_reg(handle, REG_ADC_CTRL, &adc_ctrl);
+        ret = io_expander_read_reg(handle, REG_ADC_CTRL, &adc_ctrl);
         if (ret != ESP_OK) return ret;
         
         if (++busy_count > 100) {  // 超时保护
@@ -474,30 +525,32 @@ esp_err_t i2c_expander_adc_read(i2c_expander_handle_t *handle, uint8_t channel, 
     } while (adc_ctrl & ADC_CTRL_BUSY);
 
     // 读取转换结果
-    return i2c_expander_read_16bit_reg(handle, REG_ADC_D_L, result);
+    return io_expander_read_16bit_reg(handle, REG_ADC_D_L, result);
 }
 
 /**
  * @brief 检查ADC转换状态
  */
-esp_err_t i2c_expander_adc_is_busy(i2c_expander_handle_t *handle, bool *busy)
+esp_err_t io_expander_adc_is_busy(io_expander_handle_t *handle, bool *busy)
 {
     if (busy == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint8_t adc_ctrl;
-    esp_err_t ret = i2c_expander_read_reg(handle, REG_ADC_CTRL, &adc_ctrl);
+    esp_err_t ret = io_expander_read_reg(handle, REG_ADC_CTRL, &adc_ctrl);
     if (ret == ESP_OK) {
         *busy = (adc_ctrl & ADC_CTRL_BUSY) != 0;
     }
     return ret;
 }
 
+// 温度传感器功能函数 (Temperature Sensor Functions)
+
 /**
  * @brief 读取温度
  */
-esp_err_t i2c_expander_temp_read(i2c_expander_handle_t *handle, uint16_t *temperature)
+esp_err_t io_expander_temp_read(io_expander_handle_t *handle, uint16_t *temperature)
 {
     if (temperature == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -506,7 +559,7 @@ esp_err_t i2c_expander_temp_read(i2c_expander_handle_t *handle, uint16_t *temper
     esp_err_t ret;
 
     // 启动温度转换
-    ret = i2c_expander_write_reg(handle, REG_TEMP_CTRL, TEMP_CTRL_START);
+    ret = io_expander_write_reg(handle, REG_TEMP_CTRL, TEMP_CTRL_START);
     if (ret != ESP_OK) return ret;
 
     // 等待转换完成
@@ -514,7 +567,7 @@ esp_err_t i2c_expander_temp_read(i2c_expander_handle_t *handle, uint16_t *temper
     uint8_t busy_count = 0;
     do {
         vTaskDelay(pdMS_TO_TICKS(1));
-        ret = i2c_expander_read_reg(handle, REG_TEMP_CTRL, &temp_ctrl);
+        ret = io_expander_read_reg(handle, REG_TEMP_CTRL, &temp_ctrl);
         if (ret != ESP_OK) return ret;
         
         if (++busy_count > 100) {  // 超时保护
@@ -525,7 +578,7 @@ esp_err_t i2c_expander_temp_read(i2c_expander_handle_t *handle, uint16_t *temper
 
     // 读取转换结果
     uint16_t temp_d;
-    ret = i2c_expander_read_16bit_reg(handle, REG_TEMP_D_L, &temp_d);
+    ret = io_expander_read_16bit_reg(handle, REG_TEMP_D_L, &temp_d);
     if (ret != ESP_OK) return ret;
     *temperature = temp_d & 0x0FFF;
     return ESP_OK;
@@ -534,43 +587,45 @@ esp_err_t i2c_expander_temp_read(i2c_expander_handle_t *handle, uint16_t *temper
 /**
  * @brief 检查温度转换状态
  */
-esp_err_t i2c_expander_temp_is_busy(i2c_expander_handle_t *handle, bool *busy)
+esp_err_t io_expander_temp_is_busy(io_expander_handle_t *handle, bool *busy)
 {
     if (busy == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint8_t temp_ctrl;
-    esp_err_t ret = i2c_expander_read_reg(handle, REG_TEMP_CTRL, &temp_ctrl);
+    esp_err_t ret = io_expander_read_reg(handle, REG_TEMP_CTRL, &temp_ctrl);
     if (ret == ESP_OK) {
         *busy = (temp_ctrl & TEMP_CTRL_BUSY) != 0;
     }
     return ret;
 }
 
+// PWM功能函数 (PWM Functions)
+
 /**
  * @brief 设置PWM频率
  */
-esp_err_t i2c_expander_pwm_set_frequency(i2c_expander_handle_t *handle, uint16_t frequency)
+esp_err_t io_expander_pwm_set_frequency(io_expander_handle_t *handle, uint16_t frequency)
 {
-    return i2c_expander_write_16bit_reg(handle, REG_PWM_FREQ_L, frequency);
+    return io_expander_write_16bit_reg(handle, REG_PWM_FREQ_L, frequency);
 }
 
 /**
  * @brief 读取PWM频率
  */
-esp_err_t i2c_expander_pwm_get_frequency(i2c_expander_handle_t *handle, uint16_t *frequency)
+esp_err_t io_expander_pwm_get_frequency(io_expander_handle_t *handle, uint16_t *frequency)
 {
     if (frequency == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return i2c_expander_read_16bit_reg(handle, REG_PWM_FREQ_L, frequency);
+    return io_expander_read_16bit_reg(handle, REG_PWM_FREQ_L, frequency);
 }
 
 /**
  * @brief 设置PWM占空比
  */
-esp_err_t i2c_expander_pwm_set_duty(i2c_expander_handle_t *handle, uint8_t channel, uint8_t duty, bool polarity, bool enable)
+esp_err_t io_expander_pwm_set_duty(io_expander_handle_t *handle, uint8_t channel, uint8_t duty, bool polarity, bool enable)
 {
     if (channel > 3 || duty > 100) {
         return ESP_ERR_INVALID_ARG;
@@ -585,13 +640,13 @@ esp_err_t i2c_expander_pwm_set_duty(i2c_expander_handle_t *handle, uint8_t chann
     
     uint8_t reg_addr_l = REG_PWM1_DUTY_L + (channel * 2);
     ESP_LOGI(TAG, "写入: %04X", duty_12bit);
-    return i2c_expander_write_16bit_reg(handle, reg_addr_l, duty_12bit);
+    return io_expander_write_16bit_reg(handle, reg_addr_l, duty_12bit);
 }
 
 /**
  * @brief 读取PWM占空比
  */
-esp_err_t i2c_expander_pwm_get_duty(i2c_expander_handle_t *handle, uint8_t channel, uint8_t *duty, bool *polarity, bool *enable)
+esp_err_t io_expander_pwm_get_duty(io_expander_handle_t *handle, uint8_t channel, uint8_t *duty, bool *polarity, bool *enable)
 {
     if (channel > 3 || duty == NULL || polarity == NULL || enable == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -600,7 +655,7 @@ esp_err_t i2c_expander_pwm_get_duty(i2c_expander_handle_t *handle, uint8_t chann
     uint8_t reg_addr_l = REG_PWM1_DUTY_L + (channel * 2);
     uint16_t duty_16bit = 0;
     
-    esp_err_t ret = i2c_expander_read_16bit_reg(handle, reg_addr_l, &duty_16bit);
+    esp_err_t ret = io_expander_read_16bit_reg(handle, reg_addr_l, &duty_16bit);
     ESP_LOGI(TAG, "读取: %04X", duty_16bit);
     if (ret != ESP_OK) return ret;
     
@@ -619,11 +674,13 @@ esp_err_t i2c_expander_pwm_get_duty(i2c_expander_handle_t *handle, uint8_t chann
     return ESP_OK;
 }
 
+// LED控制功能函数 (LED Control Functions)
+
 /**
  * @brief 设置LED数量
  * @note LED控制复用在IO14(PB7)引脚上，使用此功能时GPIO14的普通GPIO功能不可用
  */
-esp_err_t i2c_expander_led_set_count(i2c_expander_handle_t *handle, uint8_t num_leds)
+esp_err_t io_expander_led_set_count(io_expander_handle_t *handle, uint8_t num_leds)
 {
     if (num_leds > 32) {
         return ESP_ERR_INVALID_ARG;
@@ -634,13 +691,13 @@ esp_err_t i2c_expander_led_set_count(i2c_expander_handle_t *handle, uint8_t num_
     }
 
     uint8_t led_cfg = num_leds & LED_CFG_NUM_MASK;
-    return i2c_expander_write_reg(handle, REG_LED_CFG, led_cfg);
+    return io_expander_write_reg(handle, REG_LED_CFG, led_cfg);
 }
 
 /**
  * @brief 设置单个LED颜色
  */
-esp_err_t i2c_expander_led_set_color(i2c_expander_handle_t *handle, uint8_t led_index, rgb_color_t color)
+esp_err_t io_expander_led_set_color(io_expander_handle_t *handle, uint8_t led_index, rgb_color_t color)
 {
     if (led_index > 31 || color.r > 31 || color.g > 63 || color.b > 31) {
         return ESP_ERR_INVALID_ARG;
@@ -654,52 +711,56 @@ esp_err_t i2c_expander_led_set_color(i2c_expander_handle_t *handle, uint8_t led_
     
     // 写入RGB565数据（高位先行）
     uint8_t data[2] = {(rgb565 >> 8) & 0xFF, rgb565 & 0xFF};
-    return i2c_expander_write_multi_reg(handle, reg_addr, data, 2);
+    return io_expander_write_multi_reg(handle, reg_addr, data, 2);
 }
 
 /**
  * @brief 刷新LED显示
  */
-esp_err_t i2c_expander_led_refresh(i2c_expander_handle_t *handle)
+esp_err_t io_expander_led_refresh(io_expander_handle_t *handle)
 {
     uint8_t led_cfg;
-    esp_err_t ret = i2c_expander_read_reg(handle, REG_LED_CFG, &led_cfg);
+    esp_err_t ret = io_expander_read_reg(handle, REG_LED_CFG, &led_cfg);
     if (ret != ESP_OK) return ret;
 
     led_cfg |= LED_CFG_REFRESH;
-    return i2c_expander_write_reg(handle, REG_LED_CFG, led_cfg);
+    return io_expander_write_reg(handle, REG_LED_CFG, led_cfg);
 }
+
+// RTC RAM功能函数 (RTC RAM Functions)
 
 /**
  * @brief 写入RTC RAM
  */
-esp_err_t i2c_expander_rtc_ram_write(i2c_expander_handle_t *handle, uint8_t offset, const uint8_t *data, uint8_t length)
+esp_err_t io_expander_rtc_ram_write(io_expander_handle_t *handle, uint8_t offset, const uint8_t *data, uint8_t length)
 {
     if (offset > 31 || data == NULL || length == 0 || (offset + length) > 32) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint8_t reg_addr = REG_RTC_RAM_START + offset;
-    return i2c_expander_write_multi_reg(handle, reg_addr, data, length);
+    return io_expander_write_multi_reg(handle, reg_addr, data, length);
 }
 
 /**
  * @brief 读取RTC RAM
  */
-esp_err_t i2c_expander_rtc_ram_read(i2c_expander_handle_t *handle, uint8_t offset, uint8_t *data, uint8_t length)
+esp_err_t io_expander_rtc_ram_read(io_expander_handle_t *handle, uint8_t offset, uint8_t *data, uint8_t length)
 {
     if (offset > 31 || data == NULL || length == 0 || (offset + length) > 32) {
         return ESP_ERR_INVALID_ARG;
     }
 
     uint8_t reg_addr = REG_RTC_RAM_START + offset;
-    return i2c_expander_read_multi_reg(handle, reg_addr, data, length);
+    return io_expander_read_multi_reg(handle, reg_addr, data, length);
 }
+
+// 系统配置和调试函数 (System Configuration and Debug Functions)
 
 /**
  * @brief 设置I2C配置
  */
-esp_err_t i2c_expander_set_i2c_config(i2c_expander_handle_t *handle, uint8_t sleep_time, bool speed_400k, bool wake_mode, bool inter_pull_off)
+esp_err_t io_expander_set_i2c_config(io_expander_handle_t *handle, uint8_t sleep_time, bool speed_400k, bool wake_mode, bool inter_pull_off)
 {
     if (sleep_time > 15) {
         return ESP_ERR_INVALID_ARG;
@@ -723,65 +784,65 @@ esp_err_t i2c_expander_set_i2c_config(i2c_expander_handle_t *handle, uint8_t sle
     else {
         i2c_cfg |= I2C_CFG_INTER_PULL_ON;
     }
-    return i2c_expander_write_reg(handle, REG_I2C_CFG, i2c_cfg);
+    return io_expander_write_reg(handle, REG_I2C_CFG, i2c_cfg);
 }
 
 /**
  * @brief 读取参考电压
  */
-esp_err_t i2c_expander_get_ref_voltage(i2c_expander_handle_t *handle, uint16_t *ref_voltage)
+esp_err_t io_expander_get_ref_voltage(io_expander_handle_t *handle, uint16_t *ref_voltage)
 {
     if (ref_voltage == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return i2c_expander_read_16bit_reg(handle, REG_REF_VOLTAGE_L, ref_voltage);
+    return io_expander_read_16bit_reg(handle, REG_REF_VOLTAGE_L, ref_voltage);
 }
 
 // 读取GPIO寄存器状态（用于调试）
-esp_err_t i2c_expander_gpio_get_mode_reg(i2c_expander_handle_t *handle, uint16_t *mode_reg)
+esp_err_t io_expander_gpio_get_mode_reg(io_expander_handle_t *handle, uint16_t *mode_reg)
 {
     if (mode_reg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return i2c_expander_read_16bit_reg(handle, REG_GPIO_M_L, mode_reg);
+    return io_expander_read_16bit_reg(handle, REG_GPIO_M_L, mode_reg);
 }
 
-esp_err_t i2c_expander_gpio_get_output_reg(i2c_expander_handle_t *handle, uint16_t *output_reg)
+esp_err_t io_expander_gpio_get_output_reg(io_expander_handle_t *handle, uint16_t *output_reg)
 {
     if (output_reg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return i2c_expander_read_16bit_reg(handle, REG_GPIO_O_L, output_reg);
+    return io_expander_read_16bit_reg(handle, REG_GPIO_O_L, output_reg);
 }
 
-esp_err_t i2c_expander_gpio_get_input_reg(i2c_expander_handle_t *handle, uint16_t *input_reg)
+esp_err_t io_expander_gpio_get_input_reg(io_expander_handle_t *handle, uint16_t *input_reg)
 {
     if (input_reg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return i2c_expander_read_16bit_reg(handle, REG_GPIO_I_L, input_reg);
+    return io_expander_read_16bit_reg(handle, REG_GPIO_I_L, input_reg);
 }
 
-esp_err_t i2c_expander_gpio_get_pull_up_reg(i2c_expander_handle_t *handle, uint16_t *pull_up_reg)
+esp_err_t io_expander_gpio_get_pull_up_reg(io_expander_handle_t *handle, uint16_t *pull_up_reg)
 {
     if (pull_up_reg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return i2c_expander_read_16bit_reg(handle, REG_GPIO_PU_L, pull_up_reg);
+    return io_expander_read_16bit_reg(handle, REG_GPIO_PU_L, pull_up_reg);
 }
 
-esp_err_t i2c_expander_gpio_get_pull_down_reg(i2c_expander_handle_t *handle, uint16_t *pull_down_reg)
+esp_err_t io_expander_gpio_get_pull_down_reg(io_expander_handle_t *handle, uint16_t *pull_down_reg)
 {
     if (pull_down_reg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return i2c_expander_read_16bit_reg(handle, REG_GPIO_PD_L, pull_down_reg);
+    return io_expander_read_16bit_reg(handle, REG_GPIO_PD_L, pull_down_reg);
 }
 
-esp_err_t i2c_expander_gpio_get_drive_reg(i2c_expander_handle_t *handle, uint16_t *drive_reg)
+esp_err_t io_expander_gpio_get_drive_reg(io_expander_handle_t *handle, uint16_t *drive_reg)
 {
     if (drive_reg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    return i2c_expander_read_16bit_reg(handle, REG_GPIO_DRV_L, drive_reg);
+    return io_expander_read_16bit_reg(handle, REG_GPIO_DRV_L, drive_reg);
 }

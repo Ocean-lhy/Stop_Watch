@@ -18,11 +18,11 @@
 #define QSPI_D1_PIN (gpio_num_t)42
 #define QSPI_D2_PIN (gpio_num_t)46
 #define QSPI_D3_PIN (gpio_num_t)45
-#define QSPI_RST_PIN (gpio_num_t)-1 // PI4IO BIT 1
+#define QSPI_RST_PIN (gpio_num_t)-1 // PY32 BIT 14
 
 // 触摸屏引脚定义
-#define TOUCH_INT_PIN (gpio_num_t)21
-#define TOUCH_RST_PIN (gpio_num_t)-1 // PI4IO BIT 0
+#define TOUCH_INT_PIN (gpio_num_t)13
+#define TOUCH_RST_PIN (gpio_num_t)14
 #define TOUCH_SCL_PIN (gpio_num_t)48
 #define TOUCH_SDA_PIN (gpio_num_t)47
 
