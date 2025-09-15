@@ -18,6 +18,12 @@ extern "C" {
 
 void events_init(lv_ui *ui);
 
+void events_init_screen_logo(lv_ui *ui);
+void events_init_screen_time(lv_ui *ui);
+void events_init_screen_info(lv_ui *ui);
+void events_init_screen_vibra(lv_ui *ui);
+void events_init_screen_voice(lv_ui *ui);
+void events_init_screen_img(lv_ui *ui);
 
 #ifdef __cplusplus
 }

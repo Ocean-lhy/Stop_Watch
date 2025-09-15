@@ -79,10 +79,10 @@ dependencies:
 direct_dependencies:
 - espressif/esp_codec_dev
 - espressif/esp_lcd_touch
+- espressif/i2c_bus
 - idf
 - joltwallet/littlefs
 - lvgl/lvgl
-- m5_ic_aw32001
-manifest_hash: 9cec4b09eced1c31b809c1e062de4489be8bdd028389f221bd5fe2202114dd56
+manifest_hash: a016b9ed94c482a66a340b07f5c56be9a78e4be2996f6b6257bd0a6ecd8680c0
 target: esp32s3
 version: 2.0.0

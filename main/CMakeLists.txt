@@ -44,8 +44,11 @@ idf_component_register(
         spi_flash 
         esp_lcd_touch 
         esp_lcd_co5300 
-        esp_lcd_touch_cst9217
-        m5_ic_aw32001
-        I2C_Explander
+        esp_wifi
+        IO_Explander
+        m5_stamp_pm1
+    EMBED_TXTFILES "test.pcm"
 )
+
+target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_LVGL_H_INCLUDE_SIMPLE=1)
 

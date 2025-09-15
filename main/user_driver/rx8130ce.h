@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
-#include "driver/i2c.h"
+// #include "driver/i2c.h"
 #include "i2c_bus.h"
 
 // RX-8130 I2C地址

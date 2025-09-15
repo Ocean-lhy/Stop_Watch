@@ -13,27 +13,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "driver/gpio.h"
+#include "lcd_driver.h"
 
 #include "esp_littlefs.h"
-
-// I2C定义
-#define SYS_I2C_SCL (gpio_num_t)48
-#define SYS_I2C_SDA (gpio_num_t)47
-#define I2C_DEV_TIMEOUT 4000000
-
-// 按钮定义
-#define USER_BUTTON1_PIN (gpio_num_t)1
-#define USER_BUTTON2_PIN (gpio_num_t)2
-
-// power off
-#define PWROFF_PLUSE_PIN (gpio_num_t)12
-
-// 中断管脚
-#define TP_INT_IRQ_PIN (gpio_num_t)21
-
-// Grove接口
-#define GROVE_3_PIN (gpio_num_t)9
-#define GROVE_4_PIN (gpio_num_t)10
+#include "setting.h"
 
 // bit操作宏
 #define setbit(x, y) x |= (0x01 << y)

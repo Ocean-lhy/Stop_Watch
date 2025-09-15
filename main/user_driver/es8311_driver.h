@@ -19,10 +19,23 @@
 // 初始化ES8311
 void es8311_driver_init(i2c_bus_handle_t i2c_bus);
 
-// 录音和播放任务
-void record_and_play_task(void *arg);
+// 播放示例音频
+void play_demo_audio(void);
 
-// 播放标志
+// 播放示例音频任务
+void play_demo_audio_task(void *arg);
+
+// 生成和播放测试音频任务
+void generate_and_play_test_audio_task(void *arg);
+
+// 录音和播放功能
+void start_recording(void);
+void play_recording(void);
+void stop_recording(void);
+void stop_playing(void);
+
+extern bool is_recording;
+extern bool is_playing;
 extern uint8_t play_flag;
 
 #endif // ES8311_DRIVER_H

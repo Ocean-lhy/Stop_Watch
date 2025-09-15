@@ -9,11 +9,7 @@
 #include "nvs.h"
 #include <inttypes.h>
 #include "i2c_bus.h"
-#include "pi4io_driver.h"
-#include "aw32001_driver.h"
 #include "bmi270_driver.h"
-#include "bq27220_driver.h"
-#include "cst9217_driver.h"
 #include "motor_driver.h"
 static const char *TAG = "system_utils";
 
@@ -21,6 +17,8 @@ uint8_t btn1 = 0;
 uint8_t btn2 = 0;
 volatile bool touch_irq_flag = false;
 static int32_t restart_counter = 0;
+extern SemaphoreHandle_t touch_mux;
+
 
 void print_chip_info()
 {
@@ -107,27 +105,12 @@ void enter_light_sleep_mode()
 void enter_deep_sleep_mode()
 {
     ESP_LOGI(TAG, "enter_deep_sleep_mode");
-    uint8_t in_data;
-    // BQ27220 Reg 0x9206 Operation Config A
 
-    // AW32001
-    i2c_bus_device_handle_t aw32001_dev = NULL;
-    i2c_bus_read_byte(aw32001_dev, 0x01, &in_data);
-    setbit(in_data, 3);
-    i2c_bus_write_byte(aw32001_dev, 0x01, in_data);
-    i2c_bus_read_byte(aw32001_dev, 0x01, &in_data);
-    ESP_LOGI(TAG, "AW32001 0x01 CEB: %d", getbit(in_data, 3));
-
-    // BMI270
-    i2c_bus_device_handle_t bmi270_dev = NULL;
-    i2c_bus_write_byte(bmi270_dev, 0x7C, 0x01);
-    i2c_bus_write_byte(bmi270_dev, 0x7D, 0x00);
 
     // Check IRQ
-    ESP_LOGI(TAG, "IRQ G7 level: %d", gpio_get_level(TP_INT_IRQ_PIN));
+    ESP_LOGI(TAG, "IRQ G12 level: %d", gpio_get_level(IRQ_PIN));
 
-    // PI4IO
-    // i2c_bus_write_byte(pi4io_b_dev, PI4IO_REG_OUT_SET, 0b10000000); // P7 HIGH
+    
 
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
@@ -260,14 +243,14 @@ void grove_i2c_test()
 void power_off()
 {
     ESP_LOGI(TAG, "power_off");
-    gpio_config_t io_conf;
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask = (1 << PWROFF_PLUSE_PIN);
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    gpio_config(&io_conf);
-    gpio_set_level(PWROFF_PLUSE_PIN, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    gpio_set_level(PWROFF_PLUSE_PIN, 0);
+    // gpio_config_t io_conf;
+    // io_conf.intr_type = GPIO_INTR_DISABLE;
+    // io_conf.mode = GPIO_MODE_OUTPUT;
+    // io_conf.pin_bit_mask = (1 << PWROFF_PLUSE_PIN);
+    // io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    // io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    // gpio_config(&io_conf);
+    // gpio_set_level(PWROFF_PLUSE_PIN, 1);
+    // vTaskDelay(1000 / portTICK_PERIOD_MS);
+    // gpio_set_level(PWROFF_PLUSE_PIN, 0);
 }

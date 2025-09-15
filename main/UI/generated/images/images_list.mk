@@ -1,1 +1,1 @@
-GEN_CSRCS += 
+GEN_CSRCS += _StopWATCHUImodified_alpha_466x466.c _StopWATCHUI1_alpha_466x466.c _StopWATCHUI2modified_466x466.c _img_clockwise_hour_alpha_18x98.c _img_clockwise_min_alpha_18x157.c _img_clockwise_sec_alpha_31x180.c

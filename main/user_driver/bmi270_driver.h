@@ -8,6 +8,8 @@
 // BMI270设备地址
 #define BMI270_ADDR 0x68
 
+#define BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN (gpio_num_t)12
+
 // BMI270传感器类型
 #define ACCEL UINT8_C(0x00)
 #define GYRO UINT8_C(0x01)
@@ -18,6 +20,8 @@ void bmi270_dev_init(i2c_bus_handle_t i2c_bus);
 
 // 更新BMI270数据
 void bmi270_dev_update();
+
+void bmi270_get_data(int *ax, int *ay, int *az, int *gx, int *gy, int *gz);
 
 // BMI270 I2C读取回调
 int8_t bmi2_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *intf_ptr);
@@ -36,5 +40,8 @@ void bmi270_dev_sleep();
 
 // 唤醒BMI270
 void bmi270_dev_wakeup();
+
+// 测试BMI270中断唤醒休眠功能
+void bmi270_INT_wakeup_deepsleep_test();
 
 #endif // BMI270_DRIVER_H 
