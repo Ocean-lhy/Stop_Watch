@@ -9,38 +9,7 @@
 #include "lvgl.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-
-// LCD引脚定义
-#define QSPI_TE_PIN (gpio_num_t)38
-#define QSPI_CS_PIN (gpio_num_t)39
-#define QSPI_SCLK_PIN (gpio_num_t)40
-#define QSPI_D0_PIN (gpio_num_t)41
-#define QSPI_D1_PIN (gpio_num_t)42
-#define QSPI_D2_PIN (gpio_num_t)46
-#define QSPI_D3_PIN (gpio_num_t)45
-#define QSPI_RST_PIN (gpio_num_t)-1 // PY32 BIT 14
-
-// 触摸屏引脚定义
-#define TOUCH_INT_PIN (gpio_num_t)13
-#define TOUCH_RST_PIN (gpio_num_t)14
-#define TOUCH_SCL_PIN (gpio_num_t)48
-#define TOUCH_SDA_PIN (gpio_num_t)47
-
-// LCD主机和触摸主机
-#define LCD_HOST    SPI2_HOST
-#define TOUCH_HOST  I2C_NUM_0
-
-// LCD参数
-#define LCD_BIT_PER_PIXEL       (16)
-#define EXAMPLE_LCD_H_RES       466
-#define EXAMPLE_LCD_V_RES       466
-
-// LVGL参数
-#define EXAMPLE_LVGL_TICK_PERIOD_MS    1
-#define EXAMPLE_LVGL_TASK_MAX_DELAY_MS 500
-#define EXAMPLE_LVGL_TASK_MIN_DELAY_MS 1
-#define EXAMPLE_LVGL_TASK_STACK_SIZE   (32 * 1024)
-#define EXAMPLE_LVGL_TASK_PRIORITY     (configMAX_PRIORITIES - 2)
+#include "setting.h"
 
 // 外部变量声明
 extern SemaphoreHandle_t lvgl_mux;

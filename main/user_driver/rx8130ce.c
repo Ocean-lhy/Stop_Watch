@@ -89,7 +89,7 @@ esp_err_t rx8130_init(i2c_bus_handle_t i2c_bus)
     bool need_reset = false;
     uint8_t ctrl[3]; // 扩展、标志、控制寄存器
     
-    rx8130_dev = i2c_bus_device_create(i2c_bus, RX8130_I2C_ADDR, 400000);
+    rx8130_dev = i2c_bus_device_create(i2c_bus, RX8130_I2C_ADDR, 100000);
     if (rx8130_dev == NULL) {
         ESP_LOGE(TAG, "创建I2C设备失败");
         return ESP_FAIL;

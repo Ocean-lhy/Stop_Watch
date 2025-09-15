@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 // PY32引脚功能映射 (基于I2C扩展器GPIO引脚定义)
-#define PY32_MUX_CTR_PIN       2  // GPIO_PIN_3 (PC1-IO3): CH442E MUX控制
+#define PY32_MUX_CTR_PIN       12  // GPIO_PIN_3 (PA2-IO13): CH442E MUX控制 临时飞线
 
 #define PY32_AU_EN_PIN         2  // GPIO_PIN_3 (PA1-IO3): 音频使能
 #define PY32_L3B_EN_PIN        7  // GPIO_PIN_8 (PB0-IO8): L3B使能
@@ -27,12 +27,6 @@ typedef enum {
     PY32_MUX_MODE_U0  = 0,  // 连接U0串口
     PY32_MUX_MODE_USB = 1   // 连接USB
 } py32_mux_mode_t;
-
-// GROVE接口模式定义
-typedef enum {
-    PY32_GROVE_MODE_INPUT  = 0,  // GROVE接口输入模式
-    PY32_GROVE_MODE_OUTPUT = 1   // GROVE接口输出模式
-} py32_grove_mode_t;
 
 /**
  * @brief 初始化PY32驱动
@@ -60,43 +54,34 @@ esp_err_t py32_speaker_enable(void);
 esp_err_t py32_speaker_disable(void);
 
 /**
+ * @brief 启用音频
+ * @return ESP_OK成功，其他值失败
+ */
+esp_err_t py32_au_enable(void);
+
+/**
+ * @brief 禁用音频
+ * @return ESP_OK成功，其他值失败
+ */
+esp_err_t py32_au_disable(void);
+
+/**
+ * @brief 启用L3B
+ * @return ESP_OK成功，其他值失败
+ */
+esp_err_t py32_l3b_enable(void);
+
+/**
+ * @brief 禁用L3B
+ * @return ESP_OK成功，其他值失败
+ */
+esp_err_t py32_l3b_disable(void);
+
+/**
  * @brief 复位OLED/LCD显示屏
  * @return ESP_OK成功，其他值失败
  */
 esp_err_t py32_lcd_reset(void);
-
-/**
- * @brief 检测输入电压
- * @param detected 返回检测结果，true表示检测到电压
- * @return ESP_OK成功，其他值失败
- */
-esp_err_t py32_vin_detect(bool *detected);
-
-/**
- * @brief 启用GROVE 5V输出
- * @return ESP_OK成功，其他值失败
- */
-esp_err_t py32_grove_5v_enable(void);
-
-/**
- * @brief 禁用GROVE 5V输出
- * @return ESP_OK成功，其他值失败
- */
-esp_err_t py32_grove_5v_disable(void);
-
-/**
- * @brief 设置GROVE接口模式
- * @param mode GROVE接口模式，输入或输出
- * @return ESP_OK成功，其他值失败
- */
-esp_err_t py32_grove_set_mode(py32_grove_mode_t mode);
-
-/**
- * @brief 获取GROVE接口当前模式
- * @param mode 返回当前GROVE接口模式
- * @return ESP_OK成功，其他值失败
- */
-esp_err_t py32_grove_get_mode(py32_grove_mode_t *mode);
 
 /**
  * @brief 设置CH442E MUX模式

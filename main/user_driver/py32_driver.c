@@ -122,7 +122,7 @@ esp_err_t py32_init(i2c_bus_handle_t i2c_bus)
     // 初始化引脚状态
     io_expander_gpio_set_level(py32_handle, PY32_SPK_EN_PIN, 1);         // 扬声器默认禁用
     io_expander_gpio_set_level(py32_handle, PY32_MUX_CTR_PIN, 0);        // 默认连接U0串口
-    io_expander_gpio_set_level(py32_handle, PY32_AU_EN_PIN, 0);      // GROVE默认输入模式
+    io_expander_gpio_set_level(py32_handle, PY32_AU_EN_PIN, 1);          // 音频默认禁用
     io_expander_gpio_set_level(py32_handle, PY32_OLED_RST_PIN, 1);       // OLED不复位
     io_expander_gpio_set_level(py32_handle, PY32_L3B_EN_PIN, 1); 
 
@@ -191,6 +191,38 @@ esp_err_t py32_speaker_disable(void)
 }
 
 /**
+ * @brief 启用音频
+ */
+esp_err_t py32_au_enable(void)
+{
+    return io_expander_gpio_set_level(py32_handle, PY32_AU_EN_PIN, 1);
+}
+
+/**
+ * @brief 禁用音频
+ */
+esp_err_t py32_au_disable(void)
+{
+    return io_expander_gpio_set_level(py32_handle, PY32_AU_EN_PIN, 0);
+}
+
+/**
+ * @brief 启用L3B
+ */
+esp_err_t py32_l3b_enable(void)
+{
+    return io_expander_gpio_set_level(py32_handle, PY32_L3B_EN_PIN, 1);
+}
+
+/**
+ * @brief 禁用L3B
+ */
+esp_err_t py32_l3b_disable(void)
+{
+    return io_expander_gpio_set_level(py32_handle, PY32_L3B_EN_PIN, 0);
+}
+
+/**
  * @brief 复位OLED/LCD显示屏
  */
 esp_err_t py32_lcd_reset(void)
@@ -213,34 +245,6 @@ esp_err_t py32_lcd_reset(void)
 
     vTaskDelay(pdMS_TO_TICKS(50));  // 延时50ms等待复位完成
 
-    return ESP_OK;
-}
-
-/**
- * @brief 启用GROVE 5V输出
- */
-esp_err_t py32_grove_5v_enable(void)
-{
-    if (py32_handle == NULL) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    ESP_LOGI(TAG, "启用GROVE 5V输出");
-    // return io_expander_gpio_set_level(py32_handle, PY32_GROVE_VOUT_EN_PIN, 1);
-    return ESP_OK;
-}
-
-/**
- * @brief 禁用GROVE 5V输出
- */
-esp_err_t py32_grove_5v_disable(void)
-{
-    if (py32_handle == NULL) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    ESP_LOGI(TAG, "禁用GROVE 5V输出");
-    // return io_expander_gpio_set_level(py32_handle, PY32_GROVE_VOUT_EN_PIN, 0);
     return ESP_OK;
 }
 

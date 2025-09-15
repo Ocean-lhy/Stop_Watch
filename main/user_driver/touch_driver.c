@@ -1,9 +1,7 @@
 #include "touch_driver.h"
 #include "cst820_driver.h"
-#include "cst9217_driver.h"
 #include "esp_log.h"
 #include <string.h>
-#include "pi4io_driver.h"
 
 static const char *TAG = "touch_driver";
 static touch_data_t touch_data = {0};
@@ -17,14 +15,8 @@ static bool touch_initialized = false;
 static touch_chip_type_t detect_touch_chip(i2c_bus_handle_t i2c_bus)
 {
     ESP_LOGI(TAG, "检测触摸芯片类型...");
-    
-    // 先尝试初始化CST9217
-    if (cst9217_init(i2c_bus) == 0) {
-        ESP_LOGI(TAG, "检测到CST9217芯片");
-        return TOUCH_CHIP_CST9217;
-    }
-    
-    // 如果CST9217初始化失败，尝试CST820
+
+    // 尝试CST820
     if (cst820_init(i2c_bus) == 0) {
         ESP_LOGI(TAG, "检测到CST820芯片");
         return TOUCH_CHIP_CST820;
@@ -45,21 +37,6 @@ static touch_status_t convert_cst820_status(uint8_t cst820_status)
         case 0: return TOUCH_STATUS_PRESSED;   // 按下
         case 1: return TOUCH_STATUS_RELEASED;  // 抬起
         case 2: return TOUCH_STATUS_CONTACT;   // 保持或移动
-        default: return TOUCH_STATUS_RELEASED;
-    }
-}
-
-/**
- * @brief 转换CST9217状态到统一状态
- * @param switch_value CST9217的switch值
- * @return 统一的触摸状态
- */
-static touch_status_t convert_cst9217_status(uint8_t switch_value)
-{
-    switch (switch_value) {
-        case 0x06: return TOUCH_STATUS_PRESSED;  // 按下
-        case 0x04: return TOUCH_STATUS_RELEASED; // 抬起
-        case 0x05: return TOUCH_STATUS_CONTACT;  // 移动
         default: return TOUCH_STATUS_RELEASED;
     }
 }
@@ -110,29 +87,6 @@ int touch_driver_update(void)
                 touch_data.points[0].status = convert_cst820_status(cst820_status);
                 touch_data.points[0].valid = true;
                 touch_data.data_ready = true;
-            }
-            break;
-        }
-        
-        case TOUCH_CHIP_CST9217: {
-            int finger_count = cst9217_update();
-            if (finger_count > 0 && finger_count <= TOUCH_MAX_POINTS) {
-                touch_data.point_count = finger_count;
-                for (int i = 0; i < finger_count; i++) {
-                    touch_data.points[i].id = tp_info[i].id;
-                    touch_data.points[i].x = tp_info[i].x;
-                    touch_data.points[i].y = tp_info[i].y;
-                    touch_data.points[i].pressure = tp_info[i].z;
-                    touch_data.points[i].status = convert_cst9217_status(tp_info[i].switch_);
-                    touch_data.points[i].valid = true;
-                }
-                touch_data.data_ready = true;
-                result = 0;
-            } else if (finger_count == 0) {
-                // 没有触摸点
-                result = 0;
-            } else {
-                result = -1;
             }
             break;
         }
@@ -190,10 +144,6 @@ void touch_driver_sleep(void)
             cst820_sleep();
             break;
             
-        case TOUCH_CHIP_CST9217:
-            cst9217_set_workmode(DEEPSLEEP, 1);
-            break;
-            
         default:
             ESP_LOGW(TAG, "不支持的芯片类型，无法休眠");
             break;
@@ -212,10 +162,6 @@ void touch_driver_wakeup(void)
     switch (touch_data.chip_type) {
         case TOUCH_CHIP_CST820:
             // pi4io_tp_reset();
-            break;
-            
-        case TOUCH_CHIP_CST9217:
-            cst9217_set_workmode(NOMAL_MODE, 1);
             break;
             
         default:

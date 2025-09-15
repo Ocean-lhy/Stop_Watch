@@ -58,7 +58,7 @@ void bmi2_delay_us(uint32_t period, void *intf_ptr)
 
 void bmi270_dev_init(i2c_bus_handle_t i2c_bus)
 {
-    bmi270_dev = i2c_bus_device_create(i2c_bus, BMI270_ADDR, 400000);
+    bmi270_dev = i2c_bus_device_create(i2c_bus, BMI270_ADDR, 100000);
     if (bmi270_dev == NULL)
     {
         ESP_LOGE(TAG, "bmi270_dev create failed");
@@ -130,8 +130,8 @@ void bmi270_dev_init(i2c_bus_handle_t i2c_bus)
     /* Map data ready interrupt to interrupt pin. */
     // bmi2_map_data_int(BMI2_DRDY_INT, BMI2_INT1, &aux_bmi2_dev);
 
-    // bmi2_set_int_pin_config(&pin_config, &aux_bmi2_dev);
-    // bmi270_map_feat_int(&sens_int, 1, &aux_bmi2_dev);
+    bmi2_set_int_pin_config(&pin_config, &aux_bmi2_dev);
+    bmi270_map_feat_int(&sens_int, 1, &aux_bmi2_dev);
 
 }
 
@@ -266,16 +266,16 @@ void bmi270_INT_wakeup_deepsleep_test()
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN),
         .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
     gpio_config(&io_conf);
-    esp_sleep_enable_ext0_wakeup(BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN, 1); // 1 = 高电平触发
+    esp_sleep_enable_ext0_wakeup(BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN, 0); // 1 = 高电平触发
     
     ESP_LOGI(TAG, "ESP32外部唤醒配置完成");
     ESP_LOGI(TAG, "唤醒引脚: GPIO%d", BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN);
-    ESP_LOGI(TAG, "触发电平: 高电平");
+    ESP_LOGI(TAG, "触发电平: 低电平");
     
     /* 等待一段时间确保配置生效 */
     vTaskDelay(100 / portTICK_PERIOD_MS);

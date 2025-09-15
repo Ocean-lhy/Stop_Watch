@@ -9,11 +9,6 @@
 
 #define MAX_POINTS_REPORT 5
 
-#define TOUCH_INT_PIN (gpio_num_t)13
-#define TOUCH_RST_PIN (gpio_num_t)14
-#define TOUCH_SCL_PIN (gpio_num_t)48
-#define TOUCH_SDA_PIN (gpio_num_t)47
-
 static const char *TAG = "cst820_driver";
 static i2c_bus_device_handle_t cst820_dev = NULL;
 static uint8_t chip_id; // 芯片ID
@@ -53,7 +48,7 @@ int cst820_init(i2c_bus_handle_t i2c_bus)
         touch_mux = xSemaphoreCreateBinary();
         assert(touch_mux);
     }
-    cst820_dev = i2c_bus_device_create(i2c_bus, CST820_ADDR, 400000);
+    cst820_dev = i2c_bus_device_create(i2c_bus, CST820_ADDR, 100000);
     if (cst820_dev == NULL)
     {
         ESP_LOGE(TAG, "cst820_dev create failed");
@@ -74,8 +69,8 @@ int cst820_init(i2c_bus_handle_t i2c_bus)
 
 int cst820_read_tpinfo()
 {
-    i2c_bus_read_reg(cst820_dev, CST820_CHIP_ID, 1, &chip_id, sizeof(chip_id));
-    i2c_bus_read_reg(cst820_dev, CST820_SOFT_VER, 1, &soft_ver, sizeof(soft_ver));
+    i2c_bus_read_bytes(cst820_dev, CST820_CHIP_ID, 1, &chip_id);
+    i2c_bus_read_bytes(cst820_dev, CST820_SOFT_VER, 1, &soft_ver);
     ESP_LOGI(TAG, "chip_id: %d, soft_ver: %d", chip_id, soft_ver);
     if (chip_id != 0 && soft_ver != 0)
     {
@@ -91,7 +86,7 @@ int cst820_read_tpinfo()
 
 int cst820_update()
 {
-    i2c_bus_read_reg(cst820_dev, CST820_REG_STATUS, 1, i2c_buf, 7);
+    i2c_bus_read_bytes(cst820_dev, CST820_REG_STATUS, 7, i2c_buf);
 
     finger_num = i2c_buf[2];
     cst820_x = ((uint16_t)(i2c_buf[3] & 0x0F) << 8) | i2c_buf[4];
@@ -104,5 +99,5 @@ int cst820_update()
 void cst820_sleep()
 {
     uint8_t i2c_buf[1] = {0x03};
-    i2c_bus_write_reg(cst820_dev, 0xE5, 1, i2c_buf, 1); // 进入休眠
+    i2c_bus_write_bytes(cst820_dev, 0xE5, 1, i2c_buf); // 进入休眠
 }

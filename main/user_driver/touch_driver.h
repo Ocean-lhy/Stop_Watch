@@ -12,8 +12,7 @@
 // 触摸芯片类型
 typedef enum {
     TOUCH_CHIP_NONE = 0,
-    TOUCH_CHIP_CST820,
-    TOUCH_CHIP_CST9217
+    TOUCH_CHIP_CST820
 } touch_chip_type_t;
 
 // 触摸状态

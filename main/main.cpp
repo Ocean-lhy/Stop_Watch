@@ -17,7 +17,6 @@ extern "C"
 // 导入模块化的驱动
 #include "system_utils.h"
 #include "motor_driver.h"
-#include "pi4io_driver.h"
 #include "bmi270_driver.h"
 #include "es8311_driver.h"
 #include "touch_driver.h"
@@ -39,9 +38,6 @@ extern "C"
 #include "custom.h"
 
 #define TAG "main"
-
-#define WIFI_SSID "ocean"
-#define WIFI_PASSWORD "oceanocean"
 
 // extern const uint8_t test_pcm_start[] asm("_binary_test_pcm_start");
 // extern const uint8_t test_pcm_end[]   asm("_binary_test_pcm_end");
@@ -227,11 +223,11 @@ void app_main(void)
     // 初始化I2C总线
     i2c_config_t conf;
     conf.mode = I2C_MODE_MASTER;
-    conf.sda_io_num = (gpio_num_t)47;
-    conf.scl_io_num = (gpio_num_t)48;
+    conf.sda_io_num = I2C_SDA_PIN;
+    conf.scl_io_num = I2C_SCL_PIN;
     conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
     conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.master.clk_speed = 100000;
+    conf.master.clk_speed = I2C_FREQ;
     conf.clk_flags = 0;
     i2c_bus = i2c_bus_create(I2C_NUM_0, &conf);
 
@@ -246,12 +242,74 @@ void app_main(void)
         }
     }
 
-    i2c_bus_device_handle_t pm1_dev = i2c_bus_device_create(i2c_bus, 0x6E, 100000);
+    i2c_bus_device_handle_t pm1_dev = i2c_bus_device_create(i2c_bus, PM1_ADDR, 100000);
     pm1.pm1_init(i2c_bus, &pm1_dev, 100000);
+    pm1_btn_set_cfg(PM1_ADDR_BTN_TYPE_CLICK, PM1_ADDR_BTN_CLICK_DELAY_1000MS);  // 单击延迟1秒
+    pm1_wdt_set(PM1_WDT_CTRL_DISABLE, 0);  // 禁用WDT
+
+    pm1_pwr_set_cfg(PM1_PWR_CFG_5V_INOUT, PM1_PWR_CFG_5V_INOUT, NULL);  // 设置5VINOUT使能
+    pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);  // 设置充电使能
+    pm1_gpio_set_mode(PM1_GPIO_NUM_1, PM1_GPIO_MODE_INPUT); // 充电检测引脚设置为输入
+
+    // pm1_gpio_set_mode(PM1_GPIO_NUM_2, PM1_GPIO_MODE_OUTPUT); // G12 wakeup esp32s3
+
+    // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_INPUT, PM1_GPIO_INPUT_NC, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_OPEN_DRAIN);
+    pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_OUTPUT, PM1_GPIO_OUTPUT_HIGH, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_PUSH_PULL); // low: quick charge, high r: normal charge
+
+    // pm1_irq_clear_gpio_flag(PM1_ADDR_IRQ_GPIO_ALL);
+    // pm1_irq_clear_sys_status(PM1_ADDR_IRQ_SYS_ALL);
+    // pm1_gpio_set_func(PM1_GPIO_NUM_2, PM1_GPIO_FUNC_IRQ);
+    // vTaskDelay(500 / portTICK_PERIOD_MS);
+    // pm1_gpio_set_mode(PM1_GPIO_NUM_0, PM1_GPIO_MODE_INPUT); // rtc wakeup
+    // pm1_gpio_set_pupd(PM1_GPIO_NUM_0, PM1_GPIO_PUPD_PULLDOWN);
+    // pm1_gpio_set_drv(PM1_GPIO_NUM_0, PM1_GPIO_DRV_PUSH_PULL);
+    // pm1_gpio_set_wake_en(PM1_GPIO_NUM_0, PM1_GPIO_WAKE_ENABLE);
+    // pm1_gpio_set_wake_cfg(PM1_GPIO_NUM_0, PM1_GPIO_WAKE_FALLING);
+    // pm1_gpio_set_mode(PM1_GPIO_NUM_4, PM1_GPIO_MODE_INPUT); // IMU wakeup
+    // pm1_gpio_set_pupd(PM1_GPIO_NUM_4, PM1_GPIO_PUPD_PULLDOWN);
+    // pm1_gpio_set_drv(PM1_GPIO_NUM_4, PM1_GPIO_DRV_PUSH_PULL);
+    // pm1_gpio_set_wake_en(PM1_GPIO_NUM_4, PM1_GPIO_WAKE_ENABLE);
+    // pm1_gpio_set_wake_cfg(PM1_GPIO_NUM_4, PM1_GPIO_WAKE_FALLING);
+
+    pm1_wake_src_t wake_src;
+    pm1_wake_src_read(&wake_src, PM1_ADDR_WAKE_FLAG_ALL_CLEAN);
+    if (wake_src == PM1_WAKE_SRC_UNKNOWN || wake_src == PM1_WAKE_SRC_NULL)
+    {
+        ESP_LOGE(TAG, "wake_src is unknown or null");
+    }
+    else
+    {
+        if (wake_src & PM1_WAKE_SRC_TIM)
+        {
+            ESP_LOGI(TAG, "wake_src is TIMER");
+        }
+        if (wake_src & PM1_WAKE_SRC_VIN)
+        {
+            ESP_LOGI(TAG, "wake_src is VIN");
+        }
+        if (wake_src & PM1_WAKE_SRC_PWRBTN)
+        {
+            ESP_LOGI(TAG, "wake_src is PWRBTN");
+        }
+        if (wake_src & PM1_WAKE_SRC_RSTBTN)
+        {
+            ESP_LOGI(TAG, "wake_src is RSTBTN");
+        }
+        if (wake_src & PM1_WAKE_SRC_CMD_RST)
+        {
+            ESP_LOGI(TAG, "wake_src is CMD_RST");
+        }
+        if (wake_src & PM1_WAKE_SRC_EXT_WAKE)
+        {
+            ESP_LOGI(TAG, "wake_src is EXT_WAKE");
+        }
+        if (wake_src & PM1_WAKE_SRC_5VINOUT)
+        {
+            ESP_LOGI(TAG, "wake_src is 5VINOUT");
+        }
+    }
 
     py32_init(i2c_bus);
-
-    vTaskDelay(100 / portTICK_PERIOD_MS);
 
     ESP_LOGI(TAG, "motor_init");
     motor_init();
@@ -277,7 +335,9 @@ void app_main(void)
 
     // ES8311 音频
     ESP_LOGI(TAG, "es8311_driver_init");
-    // es8311_driver_init(i2c_bus);
+    es8311_driver_init(i2c_bus);
+
+    // bmi270_INT_wakeup_deepsleep_test();
     
     uint8_t brightness = 0xFF;
     ESP_LOGI(TAG, "Start main loop");
@@ -292,10 +352,27 @@ void app_main(void)
             bmi270_dev_update();
             bmi270_get_data(&accel_x, &accel_y, &accel_z, &gyro_x, &gyro_y, &gyro_z);
             
-            ESP_LOGI(TAG, "vin_det = %d\r\n", vin_det);
+            pm1_gpio_in_state_t gpio_state;
+            pm1_gpio_get_in_state(PM1_GPIO_NUM_1, &gpio_state); // low charge, high no charge
+            ESP_LOGI(TAG, "charge status = %d", gpio_state);
+            charge_status = gpio_state == PM1_GPIO_IN_STATE_LOW ? 2 : 0;
+
+            uint16_t vbat_value;
+            pm1_vbat_read(&vbat_value);
+            voltage = vbat_value / 1000;
+
+            uint16_t vref_value;
+            pm1_vref_read(&vref_value);
+
+            uint16_t vin_value;
+            pm1_vin_read(&vin_value);
+            current = vin_value;
+
+            uint16_t _5vinout_value;
+            pm1_5vinout_read(&_5vinout_value);
 
             update_data = true;
-            // vTaskDelay(100 / portTICK_PERIOD_MS);
+            vTaskDelay(100 / portTICK_PERIOD_MS);
         }
         
 
@@ -331,22 +408,24 @@ void app_main(void)
             if (btn1_pressed)
             {
                 // test grove i2c expander
-                py32_grove_mode_t mode = PY32_GROVE_MODE_INPUT;
-                // py32_grove_get_mode(&mode);
+                py32_mux_mode_t mode = PY32_MUX_MODE_U0;
+                py32_mux_get_mode(&mode);
                 ESP_LOGI(TAG, "grove mode = %d", mode);
-                if (mode == PY32_GROVE_MODE_INPUT)
+                if (mode == PY32_MUX_MODE_U0)
                 {
-                    mode = PY32_GROVE_MODE_OUTPUT;
-                    // py32_grove_set_mode(mode);
-                    // py32_grove_5v_enable();
-                    ESP_LOGI(TAG, "grove mode = %d", mode);
+                    mode = PY32_MUX_MODE_USB;
+                    py32_mux_set_mode(mode);
+                    pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, 0, NULL);
+                    ESP_LOGI(TAG, "IO mode = %d", mode);
                 }
                 else
                 {
-                    mode = PY32_GROVE_MODE_INPUT;
-                    // py32_grove_set_mode(mode);
-                    // py32_grove_5v_disable();
-                    ESP_LOGI(TAG, "grove mode = %d", mode);
+                    mode = PY32_MUX_MODE_U0;
+                    py32_mux_set_mode(mode);
+
+                    pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);
+                    
+                    ESP_LOGI(TAG, "IO mode = %d", mode);
                 }
                 // 按键被释放
                 btn1_pressed = false;
@@ -467,7 +546,7 @@ void update_screen_data(void)
                     
                     if (lv_obj_is_valid(guider_ui.screen_info_label_current) && guider_ui.screen_info_label_current != NULL) 
                     {
-                        sprintf(current_buffer, "current reg: %d", current);
+                        sprintf(current_buffer, "vin: %d", current);
                         lv_label_set_text_static(guider_ui.screen_info_label_current, current_buffer);
                     }
 

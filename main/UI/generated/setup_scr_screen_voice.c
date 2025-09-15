@@ -121,7 +121,7 @@ void setup_scr_screen_voice(lv_ui *ui)
     //Write codes screen_voice_btn_play
     ui->screen_voice_btn_play = lv_btn_create(ui->screen_voice);
     ui->screen_voice_btn_play_label = lv_label_create(ui->screen_voice_btn_play);
-    lv_label_set_text(ui->screen_voice_btn_play_label, "loop test");
+    lv_label_set_text(ui->screen_voice_btn_play_label, "play demo");
     lv_label_set_long_mode(ui->screen_voice_btn_play_label, LV_LABEL_LONG_WRAP);
     lv_obj_align(ui->screen_voice_btn_play_label, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_pad_all(ui->screen_voice_btn_play, 0, LV_STATE_DEFAULT);
@@ -142,7 +142,7 @@ void setup_scr_screen_voice(lv_ui *ui)
     lv_obj_set_style_text_align(ui->screen_voice_btn_play, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN|LV_STATE_DEFAULT);
 
     //The custom code of screen_voice.
-    lv_obj_add_state(ui->screen_voice_btn_record, LV_STATE_DISABLED);
+    // lv_obj_add_state(ui->screen_voice_btn_record, LV_STATE_DISABLED);
 
     //Update current screen layout.
     lv_obj_update_layout(ui->screen_voice);

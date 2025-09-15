@@ -5,8 +5,7 @@
 #include <string.h>
 #include "i2c_bus.h"
 #include "system_utils.h"
-    
-#define CST820_ADDR 0x15
+#include "setting.h"
 
 #define CST820_REG_STATUS 0x00
 #define CST820_REG_GESTURE_ID 0x01

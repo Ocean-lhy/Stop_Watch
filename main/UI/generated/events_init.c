@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include "lvgl.h"
 #include "motor_driver.h"
+#include "esp_log.h"
 #if LV_USE_GUIDER_SIMULATOR && LV_USE_FREEMASTER
 #include "freemaster_client.h"
 #endif
@@ -19,7 +20,6 @@
 
 extern bool is_recording;
 extern bool is_playing;
-extern bool is_loop_test;
 
 static char buffer[32];
 
@@ -328,13 +328,13 @@ static void screen_voice_event_handler (lv_event_t *e)
         }
         case 3: 
         {
-            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start play");
+            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "play record");
             is_recording_flag = 2;
             break;
         }
         case 4:
         {
-            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start record");
+            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "play record");
             is_recording_flag = 0;
             break;
         }
@@ -354,22 +354,14 @@ static void screen_voice_btn_play_event_handler (lv_event_t *e)
     switch (code) {
     case LV_EVENT_PRESSED:
     {
-        if (!is_loop_test) 
-        {
-            is_loop_test = true;
-            is_recording = false;
-            is_playing = false;
-            lv_label_set_text(guider_ui.screen_voice_btn_play_label, "stop");
-            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start record");
-            is_recording_flag = 0;
-            es8311_test(1);
-        } 
-        else 
-        {
-            is_loop_test = false;
-            lv_label_set_text(guider_ui.screen_voice_btn_play_label, "loop test");
-            es8311_test(0);
-        }
+        // 停止任何正在进行的录音或播放
+        is_recording = false;
+        is_playing = false;
+        
+        // 播放示例音频
+        play_demo_audio();
+        
+        ESP_LOGI("VOICE_UI", "Playing demo audio");
         break;
     }
     default:
@@ -383,41 +375,38 @@ static void screen_voice_btn_record_event_handler (lv_event_t *e)
     switch (code) {
     case LV_EVENT_PRESSED:
     {
-        if (is_loop_test) 
-        {
-            is_loop_test = false;
-            lv_label_set_text(guider_ui.screen_voice_btn_play_label, "loop test");
-            es8311_test(0);
-        }
-
         switch (is_recording_flag)
         {
-            case 0:
+            case 0: // 开始录音
             {
-                is_recording = true;
+                start_recording();
                 lv_label_set_text(guider_ui.screen_voice_btn_record_label, "stop record");
                 is_recording_flag = 1;
+                ESP_LOGI("VOICE_UI", "Start recording");
             }
             break;
-            case 1:
+            case 1: // 停止录音，准备播放
             {
-                is_recording = false;
-                lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start play");
+                stop_recording();
+                lv_label_set_text(guider_ui.screen_voice_btn_record_label, "play record");
                 is_recording_flag = 2;
+                ESP_LOGI("VOICE_UI", "Stop recording");
             }
             break;
-            case 2:
+            case 2: // 开始播放录音
             {
-                is_recording = false;
+                play_recording();
                 lv_label_set_text(guider_ui.screen_voice_btn_record_label, "stop play");
                 is_recording_flag = 3;
+                ESP_LOGI("VOICE_UI", "Start playing recording");
             }
             break;
-            case 3:
+            case 3: // 停止播放，返回初始状态
             {
-                is_recording = false;
+                stop_playing();
                 lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start record");
                 is_recording_flag = 0;
+                ESP_LOGI("VOICE_UI", "Stop playing");
             }
             break;
         }

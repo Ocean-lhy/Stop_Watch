@@ -8,7 +8,7 @@
 // BMI270设备地址
 #define BMI270_ADDR 0x68
 
-#define BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN (gpio_num_t)13
+#define BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN (gpio_num_t)12
 
 // BMI270传感器类型
 #define ACCEL UINT8_C(0x00)
