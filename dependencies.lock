@@ -64,18 +64,6 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 8.3.10
-  m5_ic_aw32001:
-    component_hash: 64043e79ac3927132317dfe9671ee7604b0c39fb9a98a6059def3028c231f1db
-    dependencies:
-    - name: idf
-      version: '>=4.4'
-    - name: espressif/i2c_bus
-      version: ^1.4.0
-    source:
-      git: https://moyongming:Yumoi3202a@gitlab.m5stack.com/embedded-common-components/m5_aw32001.git
-      path: .
-      type: git
-    version: e143874605548b42634c93e109b50eb3d12ea2bb
 direct_dependencies:
 - espressif/esp_codec_dev
 - espressif/esp_lcd_touch

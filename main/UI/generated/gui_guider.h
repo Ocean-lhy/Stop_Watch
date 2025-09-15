@@ -14,6 +14,8 @@ extern "C" {
 #endif
 
 #include "lvgl.h"
+#include "lv_dclock.h"
+#include "lv_analogclock.h"
 
 typedef struct
 {

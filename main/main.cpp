@@ -196,16 +196,6 @@ void app_main(void)
 
     // 初始化全局中断
     // global_irq_init();
-
-    gpio_config_t io_11 = {
-        .pin_bit_mask = (1ULL << GPIO_NUM_11),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_ENABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&io_11);
-    gpio_set_level(GPIO_NUM_11, 0);
     
     // 初始化I2C总线
     i2c_config_t conf;
@@ -234,14 +224,15 @@ void app_main(void)
     pm1_btn_set_cfg(PM1_ADDR_BTN_TYPE_CLICK, PM1_ADDR_BTN_CLICK_DELAY_1000MS);  // 单击延迟1秒
     pm1_wdt_set(PM1_WDT_CTRL_DISABLE, 0);  // 禁用WDT
 
-    pm1_pwr_set_cfg(PM1_PWR_CFG_5V_INOUT, PM1_PWR_CFG_5V_INOUT, NULL);  // 设置5VINOUT使能
-    pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);  // 设置充电使能
+    pm1_pwr_set_cfg(PM1_PWR_CFG_LED_CONTROL, 0, NULL);
+    pm1_pwr_set_cfg(PM1_PWR_CFG_5V_INOUT, 0, NULL);  // 设置5VINOUT使能
+    pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, 0, NULL);  // 设置充电使能
     pm1_gpio_set_mode(PM1_GPIO_NUM_1, PM1_GPIO_MODE_INPUT); // 充电检测引脚设置为输入
 
     // pm1_gpio_set_mode(PM1_GPIO_NUM_2, PM1_GPIO_MODE_OUTPUT); // G12 wakeup esp32s3
 
-    // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_INPUT, PM1_GPIO_INPUT_NC, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_OPEN_DRAIN);
-    pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_OUTPUT, PM1_GPIO_OUTPUT_HIGH, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_PUSH_PULL); // low: quick charge, high r: normal charge
+    pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_INPUT, PM1_GPIO_INPUT_NC, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_OPEN_DRAIN);
+    // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_OUTPUT, PM1_GPIO_OUTPUT_HIGH, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_PUSH_PULL); // low: quick charge, high r: normal charge
 
     // pm1_irq_clear_gpio_flag(PM1_ADDR_IRQ_GPIO_ALL);
     // pm1_irq_clear_sys_status(PM1_ADDR_IRQ_SYS_ALL);
@@ -299,22 +290,19 @@ void app_main(void)
     py32_init(i2c_bus);
 
     ESP_LOGI(TAG, "motor_init");
-    motor_init();
+    // motor_init();
     
-    ESP_LOGI(TAG, "touch init");
-    touch_driver_init(i2c_bus);
+    // ESP_LOGI(TAG, "touch init");
+    // touch_driver_init(i2c_bus);
+    // touch_driver_sleep();
 
     // 创建时间同步任务
     // time_sync_task();
     // xTaskCreate(update_time, "update_time", 4096, NULL, 5, NULL);
     
-    // LCD
-    ESP_LOGI(TAG, "lcd_init");
-    lcd_init();
-    
     // RX8130
     ESP_LOGI(TAG, "RX8130 init");
-    rx8130_init(i2c_bus);
+    // rx8130_init(i2c_bus);
     
     // IMU
     ESP_LOGI(TAG, "bmi270_dev_init");
@@ -336,8 +324,8 @@ void app_main(void)
 
     // LCD
     ESP_LOGI(TAG, "lcd_init");
-    lcd_init();
-    lcd_set_sleep(true);
+    // lcd_init();
+    // lcd_set_sleep(true);
 
     // cst820
     ESP_LOGI(TAG, "cst820_init");
@@ -354,6 +342,10 @@ void app_main(void)
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to sleep: %s", esp_err_to_name(ret));
     }
+    pm1_pwr_set_cfg(PM1_PWR_CFG_DCDC_EN, 0, NULL);
+    pm1_pwr_set_cfg(PM1_PWR_CFG_LED_CONTROL, 0, NULL);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    pm1_set_i2c_sleep_time(5);
 
     spi_bus_free(LCD_HOST);
     i2c_bus_delete(&i2c_bus);
@@ -381,15 +373,15 @@ void app_main(void)
 
     rtc_gpio_isolate((gpio_num_t)GPIO_NUM_1);   // KEY1
     rtc_gpio_isolate((gpio_num_t)GPIO_NUM_2);   // KEY2
-    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_21);  // TP_INT
-    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_13);  // IMU_INT
+    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_13);  // TP_INT
+    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_12);  // IMU_INT
 
     gpio_reset_pin((gpio_num_t)GPIO_NUM_39);  // OLED_CS
     gpio_set_direction((gpio_num_t)GPIO_NUM_39, GPIO_MODE_INPUT);
     
-    gpio_reset_pin((gpio_num_t)GPIO_NUM_11);  // MOS_Q10
-    gpio_set_direction((gpio_num_t)GPIO_NUM_11, GPIO_MODE_OUTPUT);
-    gpio_set_level((gpio_num_t)GPIO_NUM_11, 1);
+    // gpio_reset_pin((gpio_num_t)GPIO_NUM_11);  // MOS_Q10
+    // gpio_set_direction((gpio_num_t)GPIO_NUM_11, GPIO_MODE_OUTPUT);
+    // gpio_set_level((gpio_num_t)GPIO_NUM_11, 1);
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     gpio_deep_sleep_hold_en();
