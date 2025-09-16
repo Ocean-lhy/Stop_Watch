@@ -280,7 +280,7 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to sleep: %s", esp_err_to_name(ret));
     }
 
-    // pm1_sys_cmd(PM1_SYS_CMD_SHUTDOWN);
+    pm1_sys_cmd(PM1_SYS_CMD_SHUTDOWN);
     pm1_set_i2c_sleep_time(5);  // 先休眠再配置关电，否则ESP32会掉电
     vTaskDelay(100 / portTICK_PERIOD_MS);
     pm1_pwr_set_cfg(PM1_PWR_CFG_LDO_EN, 0, NULL);
