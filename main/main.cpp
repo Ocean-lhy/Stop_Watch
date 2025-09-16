@@ -246,7 +246,7 @@ void app_main(void)
     pm1.pm1_init(i2c_bus, &pm1_dev, 100000);
     pm1_btn_set_cfg(PM1_ADDR_BTN_TYPE_CLICK, PM1_ADDR_BTN_CLICK_DELAY_1000MS);  // 单击延迟1秒
     pm1_wdt_set(PM1_WDT_CTRL_DISABLE, 0);  // 禁用WDT
-
+    pm1_pwr_set_cfg(PM1_PWR_CFG_LED_CONTROL, PM1_PWR_CFG_LED_CONTROL, NULL);  // 设置LED控制使能
     pm1_pwr_set_cfg(PM1_PWR_CFG_5V_INOUT, PM1_PWR_CFG_5V_INOUT, NULL);  // 设置5VINOUT使能
     pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);  // 设置充电使能
     pm1_gpio_set_mode(PM1_GPIO_NUM_1, PM1_GPIO_MODE_INPUT); // 充电检测引脚设置为输入
@@ -254,18 +254,26 @@ void app_main(void)
     pm1_gpio_set_mode(PM1_GPIO_NUM_2, PM1_GPIO_MODE_OUTPUT); // G12 wakeup esp32s3
     pm1_gpio_set_drv(PM1_GPIO_NUM_2, PM1_GPIO_DRV_PUSH_PULL);
     pm1_gpio_set_state(PM1_GPIO_NUM_2, PM1_GPIO_OUTPUT_HIGH);
+    
+    uint8_t level = gpio_get_level(BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN);
+    ESP_LOGI(TAG, "G12唤醒引脚状态: %d", level);
 
     // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_INPUT, PM1_GPIO_INPUT_NC, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_OPEN_DRAIN);
     // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_OUTPUT, PM1_GPIO_OUTPUT_HIGH, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_PUSH_PULL); // low: quick charge, high r: normal charge
-
-    pm1_irq_clear_gpio_flag(PM1_ADDR_IRQ_GPIO_ALL);
-    pm1_irq_clear_sys_status(PM1_ADDR_IRQ_SYS_ALL);
     
     // 配置G2为IRQ功能，用于向ESP32S3发送中断信号
     pm1_gpio_set_func(PM1_GPIO_NUM_2, PM1_GPIO_FUNC_IRQ);
+
+    // 确保G0和G4的IRQ不被屏蔽，允许它们触发IRQ Status 1
+    pm1_irq_set_gpio_mask(PM1_GPIO_NUM_0, PM1_IRQ_MASK_DISABLE); // 不屏蔽G0中断
+    pm1_irq_set_gpio_mask(PM1_GPIO_NUM_4, PM1_IRQ_MASK_DISABLE); // 不屏蔽G4中断
+
+    // 屏蔽其他不需要的GPIO中断
+    pm1_irq_set_gpio_mask(PM1_GPIO_NUM_1, PM1_IRQ_MASK_ENABLE);
+    pm1_irq_set_gpio_mask(PM1_GPIO_NUM_3, PM1_IRQ_MASK_ENABLE);
     
-    
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
     // pm1_gpio_set_mode(PM1_GPIO_NUM_0, PM1_GPIO_MODE_INPUT); // rtc wakeup
     // pm1_gpio_set_pupd(PM1_GPIO_NUM_0, PM1_GPIO_PUPD_PULLDOWN);
     // pm1_gpio_set_drv(PM1_GPIO_NUM_0, PM1_GPIO_DRV_PUSH_PULL);
@@ -278,6 +286,10 @@ void app_main(void)
     pm1_gpio_set_wake_cfg(PM1_GPIO_NUM_4, PM1_GPIO_WAKE_RISING);
 
     pm1_wake_src_t wake_src;
+    pm1_irq_gpio_t irq_gpio_num = PM1_ADDR_IRQ_GPIO_ALL;
+    pm1_irq_btn_t irq_btn_num = PM1_ADDR_IRQ_BTN_ALL;
+    pm1_irq_sys_t irq_sys_num = PM1_ADDR_IRQ_SYS_ALL;
+    // 必须先清除唤醒源标志，否则中断标志会重复置位
     pm1_wake_src_read(&wake_src, PM1_ADDR_WAKE_FLAG_ALL_CLEAN);
     if (wake_src == PM1_WAKE_SRC_UNKNOWN || wake_src == PM1_WAKE_SRC_NULL)
     {
@@ -314,6 +326,17 @@ void app_main(void)
             ESP_LOGI(TAG, "wake_src is 5VINOUT");
         }
     }
+    // 清除所有中断标志
+    pm1_irq_get_status(&irq_gpio_num, PM1_ADDR_IRQ_GPIO_ALL_CLEAN);
+    pm1_irq_get_btn_status(&irq_btn_num, PM1_ADDR_IRQ_BTN_ALL_CLEAN);
+    pm1_irq_get_sys_status(&irq_sys_num, PM1_ADDR_IRQ_SYS_ALL_CLEAN);
+    // check irq clean again
+    pm1_irq_get_status(&irq_gpio_num, PM1_ADDR_IRQ_GPIO_ALL_CLEAN);
+    pm1_irq_get_btn_status(&irq_btn_num, PM1_ADDR_IRQ_BTN_ALL_CLEAN);
+    pm1_irq_get_sys_status(&irq_sys_num, PM1_ADDR_IRQ_SYS_ALL_CLEAN);
+
+    level = gpio_get_level(BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN);
+    ESP_LOGI(TAG, "清除中断标志后的G12唤醒引脚状态: %d", level);
 
     py32_init(i2c_bus);
 
@@ -343,6 +366,7 @@ void app_main(void)
     ESP_LOGI(TAG, "es8311_driver_init");
     // es8311_driver_init(i2c_bus);
 
+    pm1_pwr_set_cfg(PM1_PWR_CFG_LED_CONTROL, 0, NULL);  // 关闭LED控制
     bmi270_INT_wakeup_deepsleep_test();
     
     uint8_t brightness = 0xFF;

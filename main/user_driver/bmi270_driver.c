@@ -205,10 +205,10 @@ void bmi270_INT_wakeup_deepsleep_test()
     /* 配置INT2引脚 */
     struct bmi2_int_pin_config int2_pin_cfg = {0};
     int2_pin_cfg.pin_type = BMI2_INT1;
-    int2_pin_cfg.pin_cfg[1].lvl = BMI2_INT_ACTIVE_HIGH;
-    int2_pin_cfg.pin_cfg[1].od = BMI2_INT_PUSH_PULL;
-    int2_pin_cfg.pin_cfg[1].output_en = BMI2_INT_OUTPUT_ENABLE;
-    int2_pin_cfg.pin_cfg[1].input_en = BMI2_INT_INPUT_DISABLE;
+    int2_pin_cfg.pin_cfg[0].lvl = BMI2_INT_ACTIVE_HIGH;
+    int2_pin_cfg.pin_cfg[0].od = BMI2_INT_PUSH_PULL;
+    int2_pin_cfg.pin_cfg[0].output_en = BMI2_INT_OUTPUT_ENABLE;
+    int2_pin_cfg.pin_cfg[0].input_en = BMI2_INT_INPUT_DISABLE;
     int2_pin_cfg.int_latch = BMI2_INT_NON_LATCH;
     
     rslt = bmi2_set_int_pin_config(&int2_pin_cfg, &aux_bmi2_dev);
@@ -257,7 +257,7 @@ void bmi270_INT_wakeup_deepsleep_test()
         return;
     }
     
-    ESP_LOGI(TAG, "BMI270 INT2配置完成");
+    ESP_LOGI(TAG, "BMI270 INT1配置完成");
     ESP_LOGI(TAG, "任意运动检测阈值: %d mg", any_motion_cfg.cfg.any_motion.threshold);
     ESP_LOGI(TAG, "持续时间: %d ms", any_motion_cfg.cfg.any_motion.duration * 20);
     ESP_LOGI(TAG, "当设备发生运动时，INT1引脚将产生中断信号");
@@ -289,6 +289,8 @@ void bmi270_INT_wakeup_deepsleep_test()
     // {
     //     bmi2_get_int_status(&int_status, &aux_bmi2_dev);
     //     ESP_LOGI(TAG, "INT1状态: %d", int_status);
+    //     uint8_t level = gpio_get_level(BMI270_INT2_WAKEUP_DEEPSLEEP_TEST_PIN);
+    //     ESP_LOGI(TAG, "唤醒引脚状态: %d", level);
     //     vTaskDelay(500 / portTICK_PERIOD_MS);
     // }
     
