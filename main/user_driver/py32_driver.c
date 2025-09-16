@@ -101,11 +101,11 @@ esp_err_t py32_init(i2c_bus_handle_t i2c_bus)
 
     // 配置引脚模式
     // 输出引脚
-    io_expander_gpio_set_mode(py32_handle, PY32_SPK_EN_PIN, IO_EXP_GPIO_MODE_OUTPUT);
-    io_expander_gpio_set_mode(py32_handle, PY32_MUX_CTR_PIN, IO_EXP_GPIO_MODE_OUTPUT);
-    io_expander_gpio_set_mode(py32_handle, PY32_AU_EN_PIN, IO_EXP_GPIO_MODE_OUTPUT);
-    io_expander_gpio_set_mode(py32_handle, PY32_OLED_RST_PIN, IO_EXP_GPIO_MODE_OUTPUT);
-    io_expander_gpio_set_mode(py32_handle, PY32_L3B_EN_PIN, IO_EXP_GPIO_MODE_OUTPUT);
+    // io_expander_gpio_set_mode(py32_handle, PY32_SPK_EN_PIN, IO_EXP_GPIO_MODE_OUTPUT);
+    // io_expander_gpio_set_mode(py32_handle, PY32_MUX_CTR_PIN, IO_EXP_GPIO_MODE_OUTPUT);
+    // io_expander_gpio_set_mode(py32_handle, PY32_AU_EN_PIN, IO_EXP_GPIO_MODE_OUTPUT);
+    // io_expander_gpio_set_mode(py32_handle, PY32_OLED_RST_PIN, IO_EXP_GPIO_MODE_OUTPUT);
+    // io_expander_gpio_set_mode(py32_handle, PY32_L3B_EN_PIN, IO_EXP_GPIO_MODE_OUTPUT);
     // 注意：MOTOR_EN_PIN 使用PWM功能时不需要设置GPIO模式
 
     // 输入引脚
@@ -113,25 +113,25 @@ esp_err_t py32_init(i2c_bus_handle_t i2c_bus)
     // io_expander_gpio_set_pull(py32_handle, PY32_VIN_DET_PIN, IO_EXP_GPIO_PULL_DOWN);
 
     // 设置输出引脚驱动模式
-    io_expander_gpio_set_drive(py32_handle, PY32_SPK_EN_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL);
-    io_expander_gpio_set_drive(py32_handle, PY32_MUX_CTR_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL);
-    io_expander_gpio_set_drive(py32_handle, PY32_AU_EN_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL);
-    io_expander_gpio_set_drive(py32_handle, PY32_OLED_RST_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL);
-    io_expander_gpio_set_drive(py32_handle, PY32_L3B_EN_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL);
+    // io_expander_gpio_set_drive(py32_handle, PY32_SPK_EN_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL);
+    // io_expander_gpio_set_drive(py32_handle, PY32_MUX_CTR_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL);
+    // io_expander_gpio_set_drive(py32_handle, PY32_AU_EN_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL);
+    // io_expander_gpio_set_drive(py32_handle, PY32_OLED_RST_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL);
+    // io_expander_gpio_set_drive(py32_handle, PY32_L3B_EN_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL);
 
     // 初始化引脚状态
-    io_expander_gpio_set_level(py32_handle, PY32_SPK_EN_PIN, 1);         // 扬声器默认禁用
-    io_expander_gpio_set_level(py32_handle, PY32_MUX_CTR_PIN, 0);        // 默认连接U0串口
-    io_expander_gpio_set_level(py32_handle, PY32_AU_EN_PIN, 1);          // 音频默认禁用
-    io_expander_gpio_set_level(py32_handle, PY32_OLED_RST_PIN, 1);       // OLED不复位
-    io_expander_gpio_set_level(py32_handle, PY32_L3B_EN_PIN, 1); 
+    // io_expander_gpio_set_level(py32_handle, PY32_SPK_EN_PIN, 0);         // 扬声器默认禁用
+    // io_expander_gpio_set_level(py32_handle, PY32_MUX_CTR_PIN, 0);        // 默认连接U0串口
+    // io_expander_gpio_set_level(py32_handle, PY32_AU_EN_PIN, 0);          // 音频默认禁用
+    // io_expander_gpio_set_level(py32_handle, PY32_OLED_RST_PIN, 1);       // OLED不复位
+    // io_expander_gpio_set_level(py32_handle, PY32_L3B_EN_PIN, 1); 
 
     // 设置PWM频率为5KHz
-    io_expander_pwm_set_frequency(py32_handle, (uint16_t)5000);
-    io_expander_gpio_set_drive(py32_handle, PY32_MOTOR_EN_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL); // 电机PWM输出引脚需要设置为推挽输出
+    // io_expander_pwm_set_frequency(py32_handle, (uint16_t)5000);
+    // io_expander_gpio_set_drive(py32_handle, PY32_MOTOR_EN_PIN, IO_EXP_GPIO_DRIVE_PUSH_PULL); // 电机PWM输出引脚需要设置为推挽输出
 
     // 禁用电机PWM
-    io_expander_pwm_set_duty(py32_handle, PY32_MOTOR_PWM_CHANNEL, 0, false, true);
+    // io_expander_pwm_set_duty(py32_handle, PY32_MOTOR_PWM_CHANNEL, 0, false, true);
 
     io_expander_set_i2c_config(py32_handle, 0, false, false, false);
 
@@ -495,7 +495,7 @@ esp_err_t py32_sleep(uint8_t sleep_mode)
     // sleep_mode: 0=不休眠, 1-15=休眠时间
     uint8_t sleep_time = (sleep_mode > 0) ? sleep_mode : 0;
 
-    return io_expander_set_i2c_config(py32_handle, sleep_time, true, false, false);
+    return io_expander_set_i2c_config(py32_handle, sleep_time, false, false, false);
 }
 
 /**
