@@ -244,6 +244,7 @@ void app_main(void)
 
     i2c_bus_device_handle_t pm1_dev = i2c_bus_device_create(i2c_bus, PM1_ADDR, 100000);
     pm1.pm1_init(i2c_bus, &pm1_dev, 100000);
+    pm1_ldo_set_power_hold(false);
     pm1_btn_set_cfg(PM1_ADDR_BTN_TYPE_CLICK, PM1_ADDR_BTN_CLICK_DELAY_1000MS);  // 单击延迟1秒
     pm1_wdt_set(PM1_WDT_CTRL_DISABLE, 0);  // 禁用WDT
     pm1_pwr_set_cfg(PM1_PWR_CFG_LED_CONTROL, PM1_PWR_CFG_LED_CONTROL, NULL);  // 设置LED控制使能
@@ -262,7 +263,7 @@ void app_main(void)
     // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_OUTPUT, PM1_GPIO_OUTPUT_HIGH, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_PUSH_PULL); // low: quick charge, high r: normal charge
     
     // 配置G2为IRQ功能，用于向ESP32S3发送中断信号
-    pm1_gpio_set_func(PM1_GPIO_NUM_2, PM1_GPIO_FUNC_IRQ);
+    // pm1_gpio_set_func(PM1_GPIO_NUM_2, PM1_GPIO_FUNC_IRQ);
 
     // 确保G0和G4的IRQ不被屏蔽，允许它们触发IRQ Status 1
     pm1_irq_set_gpio_mask(PM1_GPIO_NUM_0, PM1_IRQ_MASK_DISABLE); // 不屏蔽G0中断
@@ -281,7 +282,7 @@ void app_main(void)
     // pm1_gpio_set_wake_cfg(PM1_GPIO_NUM_0, PM1_GPIO_WAKE_RISING);
     pm1_gpio_set_mode(PM1_GPIO_NUM_4, PM1_GPIO_MODE_INPUT); // IMU wakeup
     pm1_gpio_set_pupd(PM1_GPIO_NUM_4, PM1_GPIO_PUPD_PULLDOWN);
-    pm1_gpio_set_drv(PM1_GPIO_NUM_4, PM1_GPIO_DRV_PUSH_PULL);
+    // pm1_gpio_set_drv(PM1_GPIO_NUM_4, PM1_GPIO_DRV_PUSH_PULL);
     pm1_gpio_set_wake_en(PM1_GPIO_NUM_4, PM1_GPIO_WAKE_ENABLE);
     pm1_gpio_set_wake_cfg(PM1_GPIO_NUM_4, PM1_GPIO_WAKE_RISING);
 
@@ -368,6 +369,8 @@ void app_main(void)
 
     pm1_pwr_set_cfg(PM1_PWR_CFG_LED_CONTROL, 0, NULL);  // 关闭LED控制
     bmi270_INT_wakeup_deepsleep_test();
+    pm1_ldo_set_power_hold(true);
+    pm1_sys_cmd(PM1_SYS_CMD_SHUTDOWN);
     
     uint8_t brightness = 0xFF;
     ESP_LOGI(TAG, "Start main loop");

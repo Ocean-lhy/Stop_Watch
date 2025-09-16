@@ -298,5 +298,5 @@ void bmi270_INT_wakeup_deepsleep_test()
     vTaskDelay(100 / portTICK_PERIOD_MS);
     
     /* 进入深度睡眠 */
-    esp_deep_sleep_start();
+    // esp_deep_sleep_start();
 }
