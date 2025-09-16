@@ -251,31 +251,37 @@ void app_main(void)
     pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);  // 设置充电使能
     pm1_gpio_set_mode(PM1_GPIO_NUM_1, PM1_GPIO_MODE_INPUT); // 充电检测引脚设置为输入
 
-    // pm1_gpio_set_mode(PM1_GPIO_NUM_2, PM1_GPIO_MODE_OUTPUT); // G12 wakeup esp32s3
+    pm1_gpio_set_mode(PM1_GPIO_NUM_2, PM1_GPIO_MODE_OUTPUT); // G12 wakeup esp32s3
+    pm1_gpio_set_drv(PM1_GPIO_NUM_2, PM1_GPIO_DRV_PUSH_PULL);
+    pm1_gpio_set_state(PM1_GPIO_NUM_2, PM1_GPIO_OUTPUT_HIGH);
 
     // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_INPUT, PM1_GPIO_INPUT_NC, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_OPEN_DRAIN);
-    pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_OUTPUT, PM1_GPIO_OUTPUT_HIGH, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_PUSH_PULL); // low: quick charge, high r: normal charge
+    // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_OUTPUT, PM1_GPIO_OUTPUT_HIGH, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_PUSH_PULL); // low: quick charge, high r: normal charge
 
-    // pm1_irq_clear_gpio_flag(PM1_ADDR_IRQ_GPIO_ALL);
-    // pm1_irq_clear_sys_status(PM1_ADDR_IRQ_SYS_ALL);
-    // pm1_gpio_set_func(PM1_GPIO_NUM_2, PM1_GPIO_FUNC_IRQ);
-    // vTaskDelay(500 / portTICK_PERIOD_MS);
+    pm1_irq_clear_gpio_flag(PM1_ADDR_IRQ_GPIO_ALL);
+    pm1_irq_clear_sys_status(PM1_ADDR_IRQ_SYS_ALL);
+    
+    // 配置G2为IRQ功能，用于向ESP32S3发送中断信号
+    pm1_gpio_set_func(PM1_GPIO_NUM_2, PM1_GPIO_FUNC_IRQ);
+    
+    
+    vTaskDelay(500 / portTICK_PERIOD_MS);
     // pm1_gpio_set_mode(PM1_GPIO_NUM_0, PM1_GPIO_MODE_INPUT); // rtc wakeup
     // pm1_gpio_set_pupd(PM1_GPIO_NUM_0, PM1_GPIO_PUPD_PULLDOWN);
     // pm1_gpio_set_drv(PM1_GPIO_NUM_0, PM1_GPIO_DRV_PUSH_PULL);
     // pm1_gpio_set_wake_en(PM1_GPIO_NUM_0, PM1_GPIO_WAKE_ENABLE);
-    // pm1_gpio_set_wake_cfg(PM1_GPIO_NUM_0, PM1_GPIO_WAKE_FALLING);
-    // pm1_gpio_set_mode(PM1_GPIO_NUM_4, PM1_GPIO_MODE_INPUT); // IMU wakeup
-    // pm1_gpio_set_pupd(PM1_GPIO_NUM_4, PM1_GPIO_PUPD_PULLDOWN);
-    // pm1_gpio_set_drv(PM1_GPIO_NUM_4, PM1_GPIO_DRV_PUSH_PULL);
-    // pm1_gpio_set_wake_en(PM1_GPIO_NUM_4, PM1_GPIO_WAKE_ENABLE);
-    // pm1_gpio_set_wake_cfg(PM1_GPIO_NUM_4, PM1_GPIO_WAKE_FALLING);
+    // pm1_gpio_set_wake_cfg(PM1_GPIO_NUM_0, PM1_GPIO_WAKE_RISING);
+    pm1_gpio_set_mode(PM1_GPIO_NUM_4, PM1_GPIO_MODE_INPUT); // IMU wakeup
+    pm1_gpio_set_pupd(PM1_GPIO_NUM_4, PM1_GPIO_PUPD_PULLDOWN);
+    pm1_gpio_set_drv(PM1_GPIO_NUM_4, PM1_GPIO_DRV_PUSH_PULL);
+    pm1_gpio_set_wake_en(PM1_GPIO_NUM_4, PM1_GPIO_WAKE_ENABLE);
+    pm1_gpio_set_wake_cfg(PM1_GPIO_NUM_4, PM1_GPIO_WAKE_RISING);
 
     pm1_wake_src_t wake_src;
     pm1_wake_src_read(&wake_src, PM1_ADDR_WAKE_FLAG_ALL_CLEAN);
     if (wake_src == PM1_WAKE_SRC_UNKNOWN || wake_src == PM1_WAKE_SRC_NULL)
     {
-        ESP_LOGE(TAG, "wake_src is unknown or null");
+        ESP_LOGE(TAG, "wake_src is unknown or null : %d", wake_src);
     }
     else
     {
@@ -311,8 +317,8 @@ void app_main(void)
 
     py32_init(i2c_bus);
 
-    ESP_LOGI(TAG, "motor_init");
-    motor_init();
+    // ESP_LOGI(TAG, "motor_init");
+    // motor_init();
     
     ESP_LOGI(TAG, "touch init");
     touch_driver_init(i2c_bus);
@@ -322,8 +328,8 @@ void app_main(void)
     // xTaskCreate(update_time, "update_time", 4096, NULL, 5, NULL);
     
     // LCD
-    ESP_LOGI(TAG, "lcd_init");
-    lcd_init();
+    // ESP_LOGI(TAG, "lcd_init");
+    // lcd_init();
     
     // RX8130
     ESP_LOGI(TAG, "RX8130 init");
@@ -335,9 +341,9 @@ void app_main(void)
 
     // ES8311 音频
     ESP_LOGI(TAG, "es8311_driver_init");
-    es8311_driver_init(i2c_bus);
+    // es8311_driver_init(i2c_bus);
 
-    // bmi270_INT_wakeup_deepsleep_test();
+    bmi270_INT_wakeup_deepsleep_test();
     
     uint8_t brightness = 0xFF;
     ESP_LOGI(TAG, "Start main loop");
