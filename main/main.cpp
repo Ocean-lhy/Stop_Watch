@@ -61,10 +61,8 @@ uint8_t charge_status = 0;
 
 bool vin_det = false;
 
-// 录音和播放标志
-extern bool is_recording;
-extern bool is_playing;
-uint32_t recording_start_time = 0;
+bool is_playing = false;
+bool is_recording = false;
 
 SemaphoreHandle_t touch_mux = NULL;
 extern touch_point_t lv_touch_data;
@@ -240,12 +238,13 @@ void app_main(void)
         {
             ESP_LOGI(TAG, "i2c_addr[%d] = 0x%02x", i, i2c_addr[i]);
         }
-    }
+    }      
 
     i2c_bus_device_handle_t pm1_dev = i2c_bus_device_create(i2c_bus, PM1_ADDR, 100000);
     pm1.pm1_init(i2c_bus, &pm1_dev, 100000);
     pm1_btn_set_cfg(PM1_ADDR_BTN_TYPE_CLICK, PM1_ADDR_BTN_CLICK_DELAY_1000MS);  // 单击延迟1秒
     pm1_wdt_set(PM1_WDT_CTRL_DISABLE, 0);  // 禁用WDT
+    pm1_ldo_set_power_hold(false); // 关闭LDO电源保持
 
     pm1_pwr_set_cfg(PM1_PWR_CFG_5V_INOUT, PM1_PWR_CFG_5V_INOUT, NULL);  // 设置5VINOUT使能
     pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);  // 设置充电使能
@@ -359,7 +358,16 @@ void app_main(void)
 
             uint16_t vbat_value;
             pm1_vbat_read(&vbat_value);
-            voltage = vbat_value / 1000;
+            voltage = (float)vbat_value / 1000;
+            battery_level = (float)vbat_value / 4200 * 100;
+            if (battery_level > 100)
+            {
+                battery_level = 100;
+            }
+            else if (battery_level < 0)
+            {
+                battery_level = 0;
+            }
 
             uint16_t vref_value;
             pm1_vref_read(&vref_value);
@@ -546,32 +554,28 @@ void update_screen_data(void)
                     
                     if (lv_obj_is_valid(guider_ui.screen_info_label_current) && guider_ui.screen_info_label_current != NULL) 
                     {
-                        sprintf(current_buffer, "vin: %d", current);
+                        sprintf(current_buffer, "charge voltage: %d mV", current);
                         lv_label_set_text_static(guider_ui.screen_info_label_current, current_buffer);
                     }
 
                     if (lv_obj_is_valid(guider_ui.screen_info_label_charge) && guider_ui.screen_info_label_charge != NULL) 
                     {
-                        const char* vin_str = vin_det ? ",vin" : ",no vin";
+                        // const char* vin_str = vin_det ? ",vin" : ",no vin";
                         if (charge_status == 0)
                         {
                             strcpy(charge_buffer, "bat not charging");
-                            strcat(charge_buffer, vin_str);
                         }
                         else if (charge_status == 1)
                         {
                             strcpy(charge_buffer, "bat charging done");
-                            strcat(charge_buffer, vin_str);
                         }
                         else if (charge_status == 2)
                         {
                             strcpy(charge_buffer, "bat charging");
-                            strcat(charge_buffer, vin_str);
                         }
                         else if (charge_status == 3)
                         {
                             strcpy(charge_buffer, "bat pre charging");
-                            strcat(charge_buffer, vin_str);
                         }
                         lv_label_set_text_static(guider_ui.screen_info_label_charge, charge_buffer);
                     }
@@ -629,24 +633,29 @@ void update_screen_data(void)
                     {
                         lv_bar_set_value(guider_ui.screen_voice_bar_battery, battery_level, LV_ANIM_OFF);
                     }
+                    if (lv_obj_is_valid(guider_ui.screen_voice_btn_record_label) && guider_ui.screen_voice_btn_record_label != NULL) 
+                    {
+                        if (is_recording)
+                        {
+                            lv_label_set_text_static(guider_ui.screen_voice_btn_record_label, "recording...");
+                        }
+                        else
+                        {
+                            lv_label_set_text_static(guider_ui.screen_voice_btn_record_label, "record test");
+                        }
+                    }
+                    if (lv_obj_is_valid(guider_ui.screen_voice_btn_play_label) && guider_ui.screen_voice_btn_play_label != NULL) 
+                    {
+                        if (is_playing)
+                        {
+                            lv_label_set_text_static(guider_ui.screen_voice_btn_play_label, "playing...");
+                        }
+                        else
+                        {
+                            lv_label_set_text_static(guider_ui.screen_voice_btn_play_label, "play demo");
+                        }
+                    }
                     update_data = false;
-                }
-                if (is_recording || is_playing)
-                {
-                    if (recording_start_time == 0)
-                    {
-                        recording_start_time = esp_timer_get_time();
-                    }
-                    if (lv_obj_is_valid(guider_ui.screen_voice_label_record) && guider_ui.screen_voice_label_record != NULL) 
-                    {
-                        float recording_time = (esp_timer_get_time() - recording_start_time) / 1000000.0f;
-                        sprintf(record_time_buffer, "%.1fs", recording_time);
-                        lv_label_set_text_static(guider_ui.screen_voice_label_record, record_time_buffer);
-                    }
-                }
-                else
-                {
-                    recording_start_time = 0;
                 }
                 break;
             case SCREEN_IMG:

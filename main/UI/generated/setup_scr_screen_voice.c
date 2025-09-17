@@ -75,7 +75,7 @@ void setup_scr_screen_voice(lv_ui *ui)
     //Write codes screen_voice_btn_record
     ui->screen_voice_btn_record = lv_btn_create(ui->screen_voice);
     ui->screen_voice_btn_record_label = lv_label_create(ui->screen_voice_btn_record);
-    lv_label_set_text(ui->screen_voice_btn_record_label, "start record");
+    lv_label_set_text(ui->screen_voice_btn_record_label, "record test");
     lv_label_set_long_mode(ui->screen_voice_btn_record_label, LV_LABEL_LONG_WRAP);
     lv_obj_align(ui->screen_voice_btn_record_label, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_pad_all(ui->screen_voice_btn_record, 0, LV_STATE_DEFAULT);

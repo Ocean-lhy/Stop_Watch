@@ -18,12 +18,10 @@
 
 #include "es8311_driver.h"
 
-extern bool is_recording;
 extern bool is_playing;
+extern bool is_recording;
 
 static char buffer[32];
-
-static uint8_t is_recording_flag = 0;
 
 static void screen_logo_event_handler (lv_event_t *e)
 {
@@ -326,18 +324,6 @@ static void screen_voice_event_handler (lv_event_t *e)
             ui_load_scr_animation(&guider_ui, &guider_ui.screen_vibra, guider_ui.screen_vibra_del, &guider_ui.screen_voice_del, setup_scr_screen_vibra, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false, true);
             break;
         }
-        case 3: 
-        {
-            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "play record");
-            is_recording_flag = 2;
-            break;
-        }
-        case 4:
-        {
-            lv_label_set_text(guider_ui.screen_voice_btn_record_label, "play record");
-            is_recording_flag = 0;
-            break;
-        }
         default:
             break;
         }
@@ -354,13 +340,10 @@ static void screen_voice_btn_play_event_handler (lv_event_t *e)
     switch (code) {
     case LV_EVENT_PRESSED:
     {
-        // 停止任何正在进行的录音或播放
-        is_recording = false;
-        is_playing = false;
-        
+        is_playing = true;
         // 播放示例音频
-        play_demo_audio();
-        
+        audio_play_test();
+        is_playing = false;
         ESP_LOGI("VOICE_UI", "Playing demo audio");
         break;
     }
@@ -375,41 +358,9 @@ static void screen_voice_btn_record_event_handler (lv_event_t *e)
     switch (code) {
     case LV_EVENT_PRESSED:
     {
-        switch (is_recording_flag)
-        {
-            case 0: // 开始录音
-            {
-                start_recording();
-                lv_label_set_text(guider_ui.screen_voice_btn_record_label, "stop record");
-                is_recording_flag = 1;
-                ESP_LOGI("VOICE_UI", "Start recording");
-            }
-            break;
-            case 1: // 停止录音，准备播放
-            {
-                stop_recording();
-                lv_label_set_text(guider_ui.screen_voice_btn_record_label, "play record");
-                is_recording_flag = 2;
-                ESP_LOGI("VOICE_UI", "Stop recording");
-            }
-            break;
-            case 2: // 开始播放录音
-            {
-                play_recording();
-                lv_label_set_text(guider_ui.screen_voice_btn_record_label, "stop play");
-                is_recording_flag = 3;
-                ESP_LOGI("VOICE_UI", "Start playing recording");
-            }
-            break;
-            case 3: // 停止播放，返回初始状态
-            {
-                stop_playing();
-                lv_label_set_text(guider_ui.screen_voice_btn_record_label, "start record");
-                is_recording_flag = 0;
-                ESP_LOGI("VOICE_UI", "Stop playing");
-            }
-            break;
-        }
+        is_recording = true;
+        audio_record_and_play_test();
+        is_recording = false;
         break;
     }
     default:
