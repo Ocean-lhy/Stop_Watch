@@ -9,7 +9,6 @@
 #include "nvs.h"
 #include <inttypes.h>
 #include "i2c_bus.h"
-#include "bmi270_driver.h"
 #include "motor_driver.h"
 static const char *TAG = "system_utils";
 

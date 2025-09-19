@@ -17,7 +17,8 @@ extern "C"
 // 导入模块化的驱动
 #include "system_utils.h"
 #include "motor_driver.h"
-#include "bmi270_driver.h"
+// #include "bmi270_driver.h"
+#include "bmi270_tools.h"
 #include "es8311_driver.h"
 #include "touch_driver.h"
 #include "lcd_driver.h"
@@ -46,6 +47,7 @@ m5_stamp_pm1& pm1 = m5_stamp_pm1::getInstance();
 
 lv_ui guider_ui;
 i2c_bus_handle_t i2c_bus = NULL;
+bmi270_tools* bmi270_sensor = nullptr;
 static uint64_t last_update_time = 0;
 
 uint8_t battery_level = 50; // 0-100
@@ -57,6 +59,10 @@ int accel_z = 0;
 int gyro_x = 0;
 int gyro_y = 0;
 int gyro_z = 0;
+int32_t mag_x = 0;
+int32_t mag_y = 0;
+int32_t mag_z = 0;
+bool mag_valid = false;
 uint8_t charge_status = 0;
 
 bool vin_det = false;
@@ -328,9 +334,45 @@ void app_main(void)
     ESP_LOGI(TAG, "RX8130 init");
     rx8130_init(i2c_bus);
     
-    // IMU
-    ESP_LOGI(TAG, "bmi270_dev_init");
-    bmi270_dev_init(i2c_bus);
+    // IMU - BMI270传感器初始化
+    ESP_LOGI(TAG, "BMI270 init");
+    bmi270_tools bmi270_sensor;
+    i2c_bus_device_handle_t bmi270_device_handle = i2c_bus_device_create(i2c_bus, I2C_BMI270_ADDR, 100000);
+    ret = bmi270_sensor.init(i2c_bus, &bmi270_device_handle, true, bmi270_tools::MODE_CONTEXT); // 启用磁力计
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "BMI270初始化失败: %s", esp_err_to_name(ret));
+    } else {
+        ESP_LOGI(TAG, "BMI270初始化成功，磁力计已启用");
+        // 启用默认传感器配置
+        ret = bmi270_sensor.enable_default_sensors();
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "BMI270传感器启用失败: %s", esp_err_to_name(ret));
+        } else {
+            ESP_LOGI(TAG, "BMI270传感器配置完成");
+        }
+    }
+    while (1)
+    {
+        bmi270_tools::sensor_data_t bmi270_data;
+        ret = bmi270_sensor.get_sensor_data(bmi270_data);
+        if (ret == ESP_OK)
+        {
+            ESP_LOGI(TAG, "BMI270数据获取成功");
+            if (bmi270_data.mag_valid)
+            {
+                ESP_LOGI(TAG, "BMI270磁力计数据: %d, %d, %d", bmi270_data.mag_x, bmi270_data.mag_y, bmi270_data.mag_z);
+            }
+            else
+            {
+                ESP_LOGI(TAG, "BMI270磁力计数据无效");
+            }
+        }
+        else
+        {
+            ESP_LOGE(TAG, "BMI270数据获取失败: %s", esp_err_to_name(ret));
+        }
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
 
     // ES8311 音频
     ESP_LOGI(TAG, "es8311_driver_init");
@@ -348,8 +390,8 @@ void app_main(void)
             last_update_time = esp_timer_get_time();
             
             // 更新加速度计和陀螺仪数据
-            bmi270_dev_update();
-            bmi270_get_data(&accel_x, &accel_y, &accel_z, &gyro_x, &gyro_y, &gyro_z);
+            // bmi270_dev_update();
+            // bmi270_get_data(&accel_x, &accel_y, &accel_z, &gyro_x, &gyro_y, &gyro_z);
             
             pm1_gpio_in_state_t gpio_state;
             pm1_gpio_get_in_state(PM1_GPIO_NUM_1, &gpio_state); // low charge, high no charge
@@ -407,7 +449,7 @@ void app_main(void)
                     long_press_triggered = true;
                     printf("btn1 long press detected! Starting BMI270 deep sleep demo...\n");
                     // 调用BMI270深度睡眠唤醒demo
-                    bmi270_INT_wakeup_deepsleep_test();
+                    // bmi270_INT_wakeup_deepsleep_test();
                 }
             }
         }

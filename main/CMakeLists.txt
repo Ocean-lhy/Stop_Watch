@@ -1,5 +1,15 @@
 # BMI270-Sensor-API 目录下的C文件
-file(GLOB BMI_SRCS BMI270-Sensor-API/*.c)
+file(GLOB BMI_SRCS 
+    otool_bmi270/*.cpp
+    otool_bmi270/BMI270_SensorAPI/*.c
+    otool_bmi270/BMM150_SensorAPI/*.c
+)
+
+set(BMI_INCLUDE_DIRS 
+    otool_bmi270/
+    otool_bmi270/BMI270_SensorAPI/
+    otool_bmi270/BMM150_SensorAPI/
+)
 
 file(GLOB UI_SRCS 
     UI/*.c 
@@ -27,13 +37,13 @@ idf_component_register(
         "main.cpp"
         "i2c_bus.c"
         ${USER_DRIVER_SRCS}
-        ${BMI_SRCS}
         ${UI_SRCS}
         ${AUDIO_SRCS}
+        ${BMI_SRCS}
     INCLUDE_DIRS 
         "."
         ${include_dirs}
-        "BMI270-Sensor-API"
+        ${BMI_INCLUDE_DIRS}
         "UI"
         "es8311"
         "user_driver"
