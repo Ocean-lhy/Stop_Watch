@@ -252,8 +252,8 @@ void app_main(void)
 
     // pm1_gpio_set_mode(PM1_GPIO_NUM_2, PM1_GPIO_MODE_OUTPUT); // G12 wakeup esp32s3
 
-    // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_INPUT, PM1_GPIO_INPUT_NC, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_OPEN_DRAIN);
-    pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_OUTPUT, PM1_GPIO_OUTPUT_HIGH, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_PUSH_PULL); // low: quick charge, high r: normal charge
+    pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_INPUT, PM1_GPIO_INPUT_NC, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_OPEN_DRAIN);
+    // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_OUTPUT, PM1_GPIO_OUTPUT_HIGH, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_PUSH_PULL); // low: quick charge, high r: normal charge
 
     // pm1_irq_clear_gpio_flag(PM1_ADDR_IRQ_GPIO_ALL);
     // pm1_irq_clear_sys_status(PM1_ADDR_IRQ_SYS_ALL);
@@ -359,7 +359,7 @@ void app_main(void)
             uint16_t vbat_value;
             pm1_vbat_read(&vbat_value);
             voltage = (float)vbat_value / 1000;
-            battery_level = (float)vbat_value / 4200 * 100;
+            battery_level = ((float)vbat_value - 3300) / (4200 - 3300) * 100;
             if (battery_level > 100)
             {
                 battery_level = 100;
@@ -416,25 +416,25 @@ void app_main(void)
             if (btn1_pressed)
             {
                 // test grove i2c expander
-                py32_mux_mode_t mode = PY32_MUX_MODE_U0;
-                py32_mux_get_mode(&mode);
-                ESP_LOGI(TAG, "grove mode = %d", mode);
-                if (mode == PY32_MUX_MODE_U0)
-                {
-                    mode = PY32_MUX_MODE_USB;
-                    py32_mux_set_mode(mode);
-                    pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, 0, NULL);
-                    ESP_LOGI(TAG, "IO mode = %d", mode);
-                }
-                else
-                {
-                    mode = PY32_MUX_MODE_U0;
-                    py32_mux_set_mode(mode);
+                // py32_mux_mode_t mode = PY32_MUX_MODE_U0;
+                // py32_mux_get_mode(&mode);
+                // ESP_LOGI(TAG, "grove mode = %d", mode);
+                // if (mode == PY32_MUX_MODE_U0)
+                // {
+                //     mode = PY32_MUX_MODE_USB;
+                //     py32_mux_set_mode(mode);
+                //     pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, 0, NULL);
+                //     ESP_LOGI(TAG, "IO mode = %d", mode);
+                // }
+                // else
+                // {
+                //     mode = PY32_MUX_MODE_U0;
+                //     py32_mux_set_mode(mode);
 
-                    pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);
+                //     pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);
                     
-                    ESP_LOGI(TAG, "IO mode = %d", mode);
-                }
+                //     ESP_LOGI(TAG, "IO mode = %d", mode);
+                // }
                 // 按键被释放
                 btn1_pressed = false;
                 uint64_t press_duration = esp_timer_get_time() - btn1_press_start_time;

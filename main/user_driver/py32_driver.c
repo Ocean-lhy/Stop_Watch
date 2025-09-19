@@ -145,6 +145,11 @@ esp_err_t py32_init(i2c_bus_handle_t i2c_bus)
     uint16_t temp = 0;
     io_expander_temp_read(py32_handle, &temp);
     ESP_LOGI(TAG, "温度: %d", temp);
+    uint8_t hw_version = 0;
+    uint8_t fw_version = 0;
+    io_expander_read_version(py32_handle, &hw_version, &fw_version);
+    ESP_LOGI(TAG, "硬件版本: %d", hw_version);
+    ESP_LOGI(TAG, "固件版本: %d", fw_version);
     return ESP_OK;
 }
 
