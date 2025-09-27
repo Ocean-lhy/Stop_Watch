@@ -28,6 +28,14 @@ typedef enum {
     PY32_MUX_MODE_USB = 1   // 连接USB
 } py32_mux_mode_t;
 
+// 功率模式定义
+typedef enum {
+    PY32_POWER_MODE_0 = 0,  // 模式0: 1.2W
+    PY32_POWER_MODE_1 = 1,  // 模式1: 1.0W
+    PY32_POWER_MODE_2 = 2,  // 模式2: 0.8W
+    PY32_POWER_MODE_3 = 3   // 模式3: 0.6W
+} py32_power_mode_t;
+
 /**
  * @brief 初始化PY32驱动
  * @param i2c_bus I2C总线句柄
@@ -152,6 +160,21 @@ esp_err_t py32_sleep(uint8_t sleep_mode);
  * @return ESP_OK成功，其他值失败
  */
 esp_err_t py32_release_all(void);
+
+/**
+ * @brief 设置功率模式
+ * @param mode 功率模式(0-3)
+ * @return ESP_OK成功，其他值失败
+ * @note 模式0:1.2W, 模式1:1.0W, 模式2:0.8W, 模式3:0.6W
+ */
+esp_err_t py32_power_set_mode(py32_power_mode_t mode);
+
+/**
+ * @brief 检查功率模式设置状态
+ * @param busy 返回功率设置状态
+ * @return ESP_OK成功，其他值失败
+ */
+esp_err_t py32_power_is_busy(bool *busy);
 
 #ifdef __cplusplus
 }

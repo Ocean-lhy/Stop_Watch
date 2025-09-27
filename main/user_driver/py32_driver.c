@@ -179,7 +179,10 @@ esp_err_t py32_speaker_enable(void)
     }
 
     ESP_LOGI(TAG, "启用扬声器");
-    return io_expander_gpio_set_level(py32_handle, PY32_SPK_EN_PIN, 1);
+    io_expander_gpio_set_level(py32_handle, PY32_SPK_EN_PIN, 1);
+    vTaskDelay(pdMS_TO_TICKS(10));
+    return py32_power_set_mode(3);
+    
 }
 
 /**
@@ -526,5 +529,48 @@ esp_err_t py32_release_all(void)
     // 禁用PWM
     ret |= io_expander_pwm_set_duty(py32_handle, PY32_MOTOR_PWM_CHANNEL, 0, false, false);
 
+    return ret;
+}
+
+/**
+ * @brief 设置功率模式
+ */
+esp_err_t py32_power_set_mode(py32_power_mode_t mode)
+{
+    if (py32_handle == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (mode > PY32_POWER_MODE_3) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const char* power_names[] = {"1.2W", "1.0W", "0.8W", "0.6W"};
+    ESP_LOGI(TAG, "设置功率模式%d (%s)", mode, power_names[mode]);
+
+    // 启动脉冲输出，模式0-3对应脉冲数0-3
+    esp_err_t ret = io_expander_pulse_start(py32_handle, mode);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "设置功率模式失败: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ESP_LOGI(TAG, "功率模式设置成功: 模式%d (%s)", mode, power_names[mode]);
+    return ESP_OK;
+}
+
+/**
+ * @brief 检查功率模式设置状态
+ */
+esp_err_t py32_power_is_busy(bool *busy)
+{
+    if (py32_handle == NULL || busy == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t ret = io_expander_pulse_is_busy(py32_handle, busy);
+    if (ret == ESP_OK) {
+        ESP_LOGD(TAG, "功率模式设置状态: %s", *busy ? "进行中" : "完成");
+    }
     return ret;
 }

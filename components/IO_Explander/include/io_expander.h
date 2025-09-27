@@ -77,6 +77,9 @@ extern "C" {
 #define REG_REF_VOLTAGE_H (0x28)  // 参考电压高字节
 #define REG_FACTORY_RESET (0x29)  // 恢复出厂设置寄存器
 
+// 脉冲输出控制寄存器 (Pulse Output Control Registers)
+#define REG_PULSE_CTRL    (0x90)  // 脉冲控制寄存器 (PB2-SPK_EN脉冲输出)
+
 // 数据存储区域 (Data Storage Areas)
 #define REG_LED_RAM_START (0x30)  // LED RGB565数据起始地址
 #define REG_LED_RAM_END   (0x6F)  // LED RGB565数据结束地址 (64字节)
@@ -151,6 +154,11 @@ extern "C" {
 
 // FACTORY_RESET寄存器位定义 (Factory Reset Register Bits)
 #define FACTORY_RESET_TRIGGER (0x3A)  // 恢复出厂设置触发值
+
+// PULSE_CTRL寄存器位定义 (Pulse Control Register Bits)
+#define PULSE_CTRL_COUNT_MASK (0x07)   // 脉冲数量掩码 (Bit 0-2, 0-3个脉冲)
+#define PULSE_CTRL_START      (1 << 6) // 启动脉冲输出 (Bit 6)
+#define PULSE_CTRL_BUSY       (1 << 7) // 脉冲输出忙标志 (Bit 7, 只读)
 
 // ====================================================================================
 // 数据结构定义 (Data Structure Definitions)
@@ -492,6 +500,24 @@ esp_err_t io_expander_bootloader_enter(io_expander_handle_t *handle);
  * @note 此操作会重置所有配置参数到默认值，包括GPIO模式、PWM设置等
  */
 esp_err_t io_expander_factory_reset(io_expander_handle_t *handle);
+
+// 脉冲输出功能函数 (Pulse Output Functions - 复用PB2-SPK_EN引脚)
+/**
+ * @brief 启动脉冲输出
+ * @param handle 句柄
+ * @param pulse_count 脉冲数量(0-3)
+ * @return ESP_OK成功，其他值失败
+ * @note 脉冲输出复用在PB2(SPK_EN)引脚上，使用此功能时GPIO的普通输出功能会被临时占用
+ */
+esp_err_t io_expander_pulse_start(io_expander_handle_t *handle, uint8_t pulse_count);
+
+/**
+ * @brief 检查脉冲输出状态
+ * @param handle 句柄
+ * @param busy 返回脉冲输出状态
+ * @return ESP_OK成功，其他值失败
+ */
+esp_err_t io_expander_pulse_is_busy(io_expander_handle_t *handle, bool *busy);
 
 #ifdef __cplusplus
 }

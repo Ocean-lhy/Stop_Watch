@@ -846,3 +846,52 @@ esp_err_t io_expander_gpio_get_drive_reg(io_expander_handle_t *handle, uint16_t 
     }
     return io_expander_read_16bit_reg(handle, REG_GPIO_DRV_L, drive_reg);
 }
+
+// 脉冲输出功能函数 (Pulse Output Functions)
+
+/**
+ * @brief 启动脉冲输出
+ */
+esp_err_t io_expander_pulse_start(io_expander_handle_t *handle, uint8_t pulse_count)
+{
+    if (handle == NULL || !handle->initialized) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (pulse_count > 3) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGI(TAG, "启动脉冲输出，脉冲数: %d", pulse_count);
+
+    // 检查是否已经在输出脉冲
+    bool busy;
+    esp_err_t ret = io_expander_pulse_is_busy(handle, &busy);
+    if (ret != ESP_OK) return ret;
+    
+    if (busy) {
+        ESP_LOGW(TAG, "脉冲输出正在进行中，无法启动新的脉冲");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // 设置脉冲数量并启动脉冲输出
+    uint8_t pulse_ctrl = (pulse_count & PULSE_CTRL_COUNT_MASK) | PULSE_CTRL_START;
+    return io_expander_write_reg(handle, REG_PULSE_CTRL, pulse_ctrl);
+}
+
+/**
+ * @brief 检查脉冲输出状态
+ */
+esp_err_t io_expander_pulse_is_busy(io_expander_handle_t *handle, bool *busy)
+{
+    if (handle == NULL || !handle->initialized || busy == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t pulse_ctrl;
+    esp_err_t ret = io_expander_read_reg(handle, REG_PULSE_CTRL, &pulse_ctrl);
+    if (ret == ESP_OK) {
+        *busy = (pulse_ctrl & PULSE_CTRL_BUSY) != 0;
+    }
+    return ret;
+}
