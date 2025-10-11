@@ -407,7 +407,7 @@ void app_main(void)
                     long_press_triggered = true;
                     printf("btn1 long press detected! Starting BMI270 deep sleep demo...\n");
                     // 调用BMI270深度睡眠唤醒demo
-                    bmi270_INT_wakeup_deepsleep_test();
+                    // bmi270_INT_wakeup_deepsleep_test();
                 }
             }
         }
@@ -435,21 +435,23 @@ void app_main(void)
                     
                 //     ESP_LOGI(TAG, "IO mode = %d", mode);
                 // }
+
                 // 按键被释放
                 btn1_pressed = false;
                 uint64_t press_duration = esp_timer_get_time() - btn1_press_start_time;
                 
                 if (!long_press_triggered && press_duration < LONG_PRESS_DURATION)
                 {
-                    // 短按处理
-                    printf("btn1 short press (duration: %llu ms)\n", press_duration / 1000);
-                    if (example_lvgl_lock(-1))
-                    {
-                        uint8_t key = 2;
-                        lv_obj_t *current = lv_scr_act();
-                        lv_event_send(current, LV_EVENT_KEY, &key);
-                        example_lvgl_unlock();
-                    }
+                    // 短按处理 - 释放BUTTON1时开启扬声器
+                    printf("btn1 short press (duration: %llu ms) - enabling speaker\n", press_duration / 1000);
+                    py32_speaker_enable();
+                    // if (example_lvgl_lock(-1))
+                    // {
+                    //     uint8_t key = 2;
+                    //     lv_obj_t *current = lv_scr_act();
+                    //     lv_event_send(current, LV_EVENT_KEY, &key);
+                    //     example_lvgl_unlock();
+                    // }
                 }
                 else if (long_press_triggered)
                 {
@@ -460,14 +462,33 @@ void app_main(void)
         if (btn2)
         {
             printf("btn2 pressed\n");
-            
             btn2 = 0;
-            if (example_lvgl_lock(-1))
+            // if (example_lvgl_lock(-1))
+            // {
+            //     uint8_t key = 1;
+            //     lv_obj_t *current = lv_scr_act();
+            //     lv_event_send(current, LV_EVENT_KEY, &key);
+            //     example_lvgl_unlock();
+            // }
+        }
+        
+        // 检查BUTTON2释放状态
+        static bool btn2_pressed = false;
+        if (gpio_get_level(USER_BUTTON2_PIN) == 0)
+        {
+            if (!btn2_pressed)
             {
-                uint8_t key = 1;
-                lv_obj_t *current = lv_scr_act();
-                lv_event_send(current, LV_EVENT_KEY, &key);
-                example_lvgl_unlock();
+                btn2_pressed = true;
+                printf("btn2 pressed\n");
+            }
+        }
+        else
+        {
+            if (btn2_pressed)
+            {
+                btn2_pressed = false;
+                printf("btn2 released - disabling speaker\n");
+                py32_speaker_disable();
             }
         }
 

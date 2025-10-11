@@ -91,7 +91,7 @@ void es8311_driver_init(i2c_bus_handle_t i2c_bus)
     es8311_codec_config_i2s(es8311_cfg.codec_mode, &es8311_cfg.i2s_iface);
     es8311_codec_ctrl_state(AUDIO_HAL_CODEC_MODE_BOTH, AUDIO_HAL_CTRL_START);
     es8311_set_mic_gain(ES8311_MIC_GAIN_12DB);
-    es8311_codec_set_voice_volume(0xA0);
+    es8311_codec_set_voice_volume(0xBF);
     
     es8311_read_all();
     es8311_test(0);
