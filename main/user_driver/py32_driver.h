@@ -11,13 +11,13 @@ extern "C" {
 #endif
 
 // PY32引脚功能映射 (基于I2C扩展器GPIO引脚定义)
-#define PY32_MUX_CTR_PIN       12  // GPIO_PIN_3 (PA2-IO13): CH442E MUX控制 临时飞线
-
+#define PY32_MUX_CTR_PIN       0  // GPIO_PIN_1 (PB5-IO1): CH442E MUX控制
 #define PY32_AU_EN_PIN         2  // GPIO_PIN_3 (PA1-IO3): 音频使能
+#define PY32_TP_RST_PIN        3  // GPIO_PIN_4 (PA3-IO4): TP复位
+#define PY32_OLED_RST_PIN      4  // GPIO_PIN_5 (PA4-IO5): OLED复位
 #define PY32_L3B_EN_PIN        7  // GPIO_PIN_8 (PB0-IO8): L3B使能
 #define PY32_MOTOR_EN_PIN      8  // GPIO_PIN_9 (PA0-IO9): 电机使能(PWM)
-#define PY32_SPK_EN_PIN        10 // GPIO_PIN_11 (PB2-IO11): 扬声器使能
-#define PY32_OLED_RST_PIN      13 // GPIO_PIN_14 (PB7-IO14): OLED复位
+#define PY32_SPK_EN_PIN        9 // GPIO_PIN_10 (PB1-IO10): 扬声器使能
 
 // PWM通道定义
 #define PY32_MOTOR_PWM_CHANNEL 0  // PWM_CHANNEL_1对应IO9(PA0)
@@ -82,6 +82,12 @@ esp_err_t py32_l3b_disable(void);
  * @return ESP_OK成功，其他值失败
  */
 esp_err_t py32_lcd_reset(void);
+
+/**
+ * @brief 复位TP
+ * @return ESP_OK成功，其他值失败
+ */
+esp_err_t py32_tp_reset(void);
 
 /**
  * @brief 设置CH442E MUX模式
