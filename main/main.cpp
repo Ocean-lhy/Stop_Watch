@@ -288,7 +288,6 @@ void app_main(void)
 
     rtc_gpio_isolate((gpio_num_t)GPIO_NUM_1);   // KEY1
     rtc_gpio_isolate((gpio_num_t)GPIO_NUM_2);   // KEY2
-    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_14);  // TP_RST
     rtc_gpio_isolate((gpio_num_t)GPIO_NUM_13);  // TP_INT
     rtc_gpio_isolate((gpio_num_t)GPIO_NUM_12);  // IMU_INT
 

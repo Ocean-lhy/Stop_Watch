@@ -249,6 +249,25 @@ esp_err_t py32_lcd_reset(void)
 }
 
 /**
+ * @brief 复位TP
+ */
+esp_err_t py32_tp_reset(void)
+{
+    esp_err_t ret = io_expander_gpio_set_level(py32_handle, PY32_TP_RST_PIN, 0);
+    if (ret != ESP_OK) return ret;
+
+    vTaskDelay(pdMS_TO_TICKS(10));  // 延时10ms
+
+    // 拉高复位引脚
+    ret = io_expander_gpio_set_level(py32_handle, PY32_TP_RST_PIN, 1);
+    if (ret != ESP_OK) return ret;
+
+    vTaskDelay(pdMS_TO_TICKS(50));  // 延时50ms等待复位完成
+
+    return ESP_OK;
+}
+
+/**
  * @brief 设置CH442E MUX模式
  */
 esp_err_t py32_mux_set_mode(py32_mux_mode_t mode)
