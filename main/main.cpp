@@ -25,6 +25,7 @@ extern "C"
 #include "time_utils.h"
 #include "py32_driver.h"
 #include "io_expander.h"
+#include "rx8130.h"
 
 }
 
@@ -93,6 +94,94 @@ static bool long_press_triggered = false;
 void sleep_mode(uint8_t sleep_mode);
 void update_screen_data(void);
 screen_type_t get_current_screen(void);
+
+// rx8130
+RX8130_Class rx8130;
+const bool esp32s3_sleep_flag = false; // if true, use esp32s3 sleep, otherwise use pm1 shutdown
+void rx8130_wakeup_test(bool sleep_flag = false)
+{
+    // i2c_master_bus_handle_t i2c0_bus_hdl = i2c_bus_get_internal_bus_handle(g_i2c_bus);
+    // rx8130.begin(i2c0_bus_hdl, RX8130_ADDR);
+    struct tm time;
+    rx8130.getTime(&time);
+    //
+    ESP_LOGI(TAG, "READ RX8130-> Time: %04d-%02d-%02d %02d:%02d:%02d", time.tm_year + 1900, time.tm_mon + 1, time.tm_mday, time.tm_hour, time.tm_min, time.tm_sec);
+    // Set time 2025 09 27 12:00:00
+    time.tm_year = 2025 - 1900;
+    time.tm_mon = 9 - 1;
+    time.tm_mday = 27;
+    time.tm_hour = 12;
+    time.tm_min = 0;
+    time.tm_sec = 0;
+    ESP_LOGI(TAG, "SET RX8130-> Time: %04d-%02d-%02d %02d:%02d:%02d", time.tm_year + 1900, time.tm_mon + 1, time.tm_mday, time.tm_hour, time.tm_min, time.tm_sec);
+    rx8130.setTime(&time);
+
+    // clear all GPIO and system irq flags
+    pm1_irq_clear_gpio_flag(PM1_ADDR_IRQ_GPIO_ALL);
+    pm1_irq_clear_sys_status(PM1_ADDR_IRQ_SYS_ALL);
+
+    // set G2 to IRQ function, for sending irq signal to ESP32S3
+    if (sleep_flag) 
+    {
+        pm1_gpio_set_func(PM1_GPIO_NUM_1, PM1_GPIO_FUNC_IRQ);
+    }
+
+    // G0 RTC and G4 IMU irq MASK DISABLE
+    pm1_irq_set_gpio_mask(PM1_GPIO_NUM_0, PM1_IRQ_MASK_DISABLE);
+    pm1_irq_set_gpio_mask(PM1_GPIO_NUM_4, PM1_IRQ_MASK_DISABLE);
+
+    pm1_irq_set_gpio_mask(PM1_GPIO_NUM_2, PM1_IRQ_MASK_ENABLE);
+    pm1_irq_set_gpio_mask(PM1_GPIO_NUM_3, PM1_IRQ_MASK_ENABLE);
+
+    // set G0 to wakeup pin, for wakeup trigger
+    pm1_gpio_set_mode(PM1_GPIO_NUM_0, PM1_GPIO_MODE_INPUT);
+    pm1_gpio_set_pupd(PM1_GPIO_NUM_0, PM1_GPIO_PUPD_PULLUP);
+    // pm1_gpio_set_drv(PM1_GPIO_NUM_0, PM1_GPIO_DRV_PUSH_PULL);
+    pm1_gpio_set_wake_en(PM1_GPIO_NUM_0, PM1_GPIO_WAKE_ENABLE);
+    pm1_gpio_set_wake_cfg(PM1_GPIO_NUM_0, PM1_GPIO_WAKE_FALLING);
+
+    // clear all wake flags
+    pm1_wake_src_t wake_src;
+    pm1_irq_gpio_t irq_gpio_num = PM1_ADDR_IRQ_GPIO_ALL;
+    pm1_irq_btn_t irq_btn_num = PM1_ADDR_IRQ_BTN_ALL;
+    pm1_irq_sys_t irq_sys_num = PM1_ADDR_IRQ_SYS_ALL;
+    // must clen wake flags first
+    pm1_wake_src_read(&wake_src, PM1_ADDR_WAKE_FLAG_ALL_CLEAN);
+    // clean other irq flags
+    pm1_irq_get_status(&irq_gpio_num, PM1_ADDR_IRQ_GPIO_ALL_CLEAN);
+    pm1_irq_get_btn_status(&irq_btn_num, PM1_ADDR_IRQ_BTN_ALL_CLEAN);
+    pm1_irq_get_sys_status(&irq_sys_num, PM1_ADDR_IRQ_SYS_ALL_CLEAN);
+
+    rx8130.setTimerIrq(10);
+
+    ESP_LOGI(TAG, "system will shutdown, and it will automatically wake up within 10 seconds.");
+    
+    if (sleep_flag) 
+    {
+        gpio_config_t io_conf = {
+            .pin_bit_mask = (1ULL << IRQ_PIN),
+            .mode = GPIO_MODE_INPUT,
+            .pull_up_en = GPIO_PULLUP_ENABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_DISABLE,
+        };
+        gpio_config(&io_conf);
+        esp_sleep_enable_ext0_wakeup(IRQ_PIN, 0);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+        esp_deep_sleep_start();
+    } 
+    else 
+    {
+        pm1_sys_cmd(PM1_SYS_CMD_SHUTDOWN);
+    }
+}
+
+void rx8130_recovery()
+{
+    rx8130.begin(i2c_bus, RX8130_ADDR);
+    rx8130.clearIrqFlags();
+    rx8130.disableIrq();
+}
 
 // 时间同步任务函数
 void time_sync_task()
@@ -357,7 +446,9 @@ void app_main(void)
     
     // RX8130
     ESP_LOGI(TAG, "RX8130 init");
-    rx8130_init(i2c_bus);
+    // rx8130_init(i2c_bus);
+    rx8130_recovery();
+    rx8130_wakeup_test(esp32s3_sleep_flag);
     
     // IMU
     ESP_LOGI(TAG, "bmi270_dev_init");

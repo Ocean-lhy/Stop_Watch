@@ -22,6 +22,8 @@ set(include_dirs
 
 file(GLOB AUDIO_SRCS es8311/*.c)
 
+file(GLOB IC_RX8130_SRCS ic_rx8130/*.cpp)
+
 idf_component_register(
     SRCS 
         "main.cpp"
@@ -30,6 +32,7 @@ idf_component_register(
         ${BMI_SRCS}
         ${UI_SRCS}
         ${AUDIO_SRCS}
+        ${IC_RX8130_SRCS}
     INCLUDE_DIRS 
         "."
         ${include_dirs}
@@ -37,6 +40,7 @@ idf_component_register(
         "UI"
         "es8311"
         "user_driver"
+        "ic_rx8130"
     REQUIRES 
         driver 
         nvs_flash 
