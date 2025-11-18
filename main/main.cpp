@@ -248,9 +248,10 @@ void app_main(void)
 
     pm1_pwr_set_cfg(PM1_PWR_CFG_5V_INOUT, PM1_PWR_CFG_5V_INOUT, NULL);  // 设置5VINOUT使能
     pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);  // 设置充电使能
-    pm1_gpio_set_mode(PM1_GPIO_NUM_1, PM1_GPIO_MODE_INPUT); // 充电检测引脚设置为输入
 
-    // pm1_gpio_set_mode(PM1_GPIO_NUM_2, PM1_GPIO_MODE_OUTPUT); // G12 wakeup esp32s3
+    pm1_gpio_set_mode(PM1_GPIO_NUM_2, PM1_GPIO_MODE_INPUT); // 充电检测引脚设置为输入
+
+    // pm1_gpio_set_mode(PM1_GPIO_NUM_1, PM1_GPIO_MODE_OUTPUT); // G12 wakeup esp32s3
 
     pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_INPUT, PM1_GPIO_INPUT_NC, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_OPEN_DRAIN);
     // pm1_gpio_set(PM1_GPIO_NUM_3, PM1_GPIO_MODE_OUTPUT, PM1_GPIO_OUTPUT_HIGH, PM1_GPIO_PUPD_NC, PM1_GPIO_DRV_PUSH_PULL); // low: quick charge, high r: normal charge
@@ -352,7 +353,7 @@ void app_main(void)
             bmi270_get_data(&accel_x, &accel_y, &accel_z, &gyro_x, &gyro_y, &gyro_z);
             
             pm1_gpio_in_state_t gpio_state;
-            pm1_gpio_get_in_state(PM1_GPIO_NUM_1, &gpio_state); // low charge, high no charge
+            pm1_gpio_get_in_state(PM1_GPIO_NUM_2, &gpio_state); // low charge, high no charge
             ESP_LOGI(TAG, "charge status = %d", gpio_state);
             charge_status = gpio_state == PM1_GPIO_IN_STATE_LOW ? 2 : 0;
 
@@ -416,25 +417,36 @@ void app_main(void)
             if (btn1_pressed)
             {
                 // test grove i2c expander
-                // py32_mux_mode_t mode = PY32_MUX_MODE_U0;
-                // py32_mux_get_mode(&mode);
-                // ESP_LOGI(TAG, "grove mode = %d", mode);
-                // if (mode == PY32_MUX_MODE_U0)
-                // {
-                //     mode = PY32_MUX_MODE_USB;
-                //     py32_mux_set_mode(mode);
-                //     pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, 0, NULL);
-                //     ESP_LOGI(TAG, "IO mode = %d", mode);
-                // }
-                // else
-                // {
-                //     mode = PY32_MUX_MODE_U0;
-                //     py32_mux_set_mode(mode);
-
-                //     pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);
-                    
-                //     ESP_LOGI(TAG, "IO mode = %d", mode);
-                // }
+                py32_mux_mode_t mode = PY32_MUX_MODE_U0;
+                py32_mux_get_mode(&mode);
+                ESP_LOGI(TAG, "grove mode = %d", mode);
+                if (mode == PY32_MUX_MODE_U0)
+                {
+                    mode = PY32_MUX_MODE_USB;
+                    py32_mux_set_mode(mode);
+                    pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, 0, NULL);
+                    pm1_pwr_set_cfg(PM1_PWR_CFG_5V_INOUT, 0, NULL);
+                    pm1_pwr_set_cfg(PM1_PWR_CFG_LED_CONTROL, 0, NULL);
+                    for (uint8_t i = 3; i <= 11; i++)
+                    {
+                        gpio_set_level((gpio_num_t)i, 0);
+                    }
+                    ESP_LOGI(TAG, "IO mode = %d, close 5VINOUT, close charge", mode);
+                }
+                else
+                {
+                    mode = PY32_MUX_MODE_U0;
+                    py32_mux_set_mode(mode);
+                    pm1_pwr_set_cfg(PM1_PWR_CFG_CHG_EN, PM1_PWR_CFG_CHG_EN, NULL);
+                    pm1_pwr_set_cfg(PM1_PWR_CFG_5V_INOUT, PM1_PWR_CFG_5V_INOUT, NULL);
+                    pm1_pwr_set_cfg(PM1_PWR_CFG_LED_CONTROL, PM1_PWR_CFG_LED_CONTROL, NULL);
+                    for (uint8_t i = 3; i <= 11; i++)
+                    {
+                        gpio_set_direction((gpio_num_t)i, GPIO_MODE_OUTPUT);
+                        gpio_set_level((gpio_num_t)i, 1);
+                    }
+                    ESP_LOGI(TAG, "IO mode = %d, open 5VINOUT, open charge", mode);
+                }
                 // 按键被释放
                 btn1_pressed = false;
                 uint64_t press_duration = esp_timer_get_time() - btn1_press_start_time;

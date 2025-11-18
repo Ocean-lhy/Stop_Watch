@@ -44,6 +44,14 @@
 #define GROVE_3_PIN (gpio_num_t)10
 #define GROVE_4_PIN (gpio_num_t)11
 
+#define EXT_GPIO3_PIN (gpio_num_t)3
+#define EXT_GPIO4_PIN (gpio_num_t)4
+#define EXT_GPIO5_PIN (gpio_num_t)5
+#define EXT_GPIO6_PIN (gpio_num_t)6
+#define EXT_GPIO7_PIN (gpio_num_t)7
+#define EXT_GPIO8_PIN (gpio_num_t)8
+#define EXT_GPIO9_PIN (gpio_num_t)9
+
 // LCD引脚定义
 #define QSPI_TE_PIN (gpio_num_t)38
 #define QSPI_CS_PIN (gpio_num_t)39
