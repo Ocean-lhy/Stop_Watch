@@ -280,19 +280,19 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to sleep: %s", esp_err_to_name(ret));
     }
 
-    pm1_sys_cmd(PM1_SYS_CMD_SHUTDOWN);
-    pm1_set_i2c_sleep_time(5);  // 先休眠再配置关电，否则ESP32会掉电
+    // pm1_sys_cmd(PM1_SYS_CMD_SHUTDOWN);
+    pm1_set_i2c_sleep_time(5);
     vTaskDelay(100 / portTICK_PERIOD_MS);
-    pm1_pwr_set_cfg(PM1_PWR_CFG_LDO_EN, 0, NULL);
-    pm1_pwr_set_cfg(PM1_PWR_CFG_DCDC_EN, 0, NULL);
+    // pm1_pwr_set_cfg(PM1_PWR_CFG_LDO_EN, 0, NULL);
+    // pm1_pwr_set_cfg(PM1_PWR_CFG_DCDC_EN, 0, NULL);
 
     rtc_gpio_isolate((gpio_num_t)GPIO_NUM_1);   // KEY1
     rtc_gpio_isolate((gpio_num_t)GPIO_NUM_2);   // KEY2
     rtc_gpio_isolate((gpio_num_t)GPIO_NUM_13);  // TP_INT
-    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_12);  // IMU_INT
+    rtc_gpio_isolate((gpio_num_t)GPIO_NUM_12);  // PY_INT
 
-    gpio_reset_pin((gpio_num_t)GPIO_NUM_39);  // OLED_CS
-    gpio_set_direction((gpio_num_t)GPIO_NUM_39, GPIO_MODE_INPUT);
+    // gpio_reset_pin((gpio_num_t)GPIO_NUM_39);  // OLED_CS
+    // gpio_set_direction((gpio_num_t)GPIO_NUM_39, GPIO_MODE_INPUT);
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     gpio_deep_sleep_hold_en();
